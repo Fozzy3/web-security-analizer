@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# Reportes generados por la herramienta
+reporte_*.txt
+reporte_*.json
+
+# Editor
+.vscode/
+.idea/

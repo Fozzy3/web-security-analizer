@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "webvulnscanner"
+version = "2.0.0"
+description = "Auditor pasivo de seguridad web: reconocimiento, TLS, headers, DNS, subdominios y correlación de CVEs"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "fozzy3" }]
+license = { text = "MIT" }
+dependencies = [
+    "dnspython>=2.6",
+]
+
+[project.optional-dependencies]
+gui = ["customtkinter>=5.2"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+webvulnscanner = "webvulnscanner.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
