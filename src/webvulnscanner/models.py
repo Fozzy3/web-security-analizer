@@ -54,6 +54,7 @@ class Finding:
     descripcion: str
     referencia: str | None = None
     evidencia: str | None = None
+    owasp: str | None = None  # categoría OWASP Top 10 2021, p.ej. "A05:2021"
 
     def to_dict(self) -> dict:
         return {
@@ -63,6 +64,7 @@ class Finding:
             "descripcion": self.descripcion,
             "referencia": self.referencia,
             "evidencia": self.evidencia,
+            "owasp": self.owasp,
         }
 
     @classmethod
@@ -74,6 +76,7 @@ class Finding:
             descripcion=d.get("descripcion", ""),
             referencia=d.get("referencia"),
             evidencia=d.get("evidencia"),
+            owasp=d.get("owasp"),
         )
 
 

@@ -11,20 +11,25 @@ import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
+from webvulnscanner import crawler, enrich, owasp
 from webvulnscanner.models import Finding, Risk, ScanResult
 from webvulnscanner.modules import (
     active,
     cve,
     disclosure,
     dns_records,
+    external,
     fingerprint,
     headers,
     ports,
     recon,
+    retire_js,
+    secrets,
     shodan_intel,
     subdomains,
     tls,
     waf,
+    webchecks,
 )
 from webvulnscanner.net import fetch
 
@@ -41,16 +46,25 @@ MODULOS = [
     ("disclosure", "Archivos y Rutas Sensibles"),
     ("waf", "Detección de WAF / CDN"),
     ("fingerprint", "Fingerprint de Tecnologías"),
+    ("webchecks", "Mixed content / SRI / Formularios"),
+    ("retirejs", "Librerías JS Vulnerables"),
+    ("secrets", "Secretos Expuestos"),
     ("cve", "Correlación de CVEs (NVD)"),
     ("shodan", "Inteligencia Shodan (opcional)"),
+    ("subfinder", "Subdominios (subfinder, externo)"),
+    ("testssl", "TLS profundo (testssl.sh, externo)"),
 ]
 
-# Módulos ACTIVOS (Fase D): solo con autorización explícita (autorizado=True).
+# Módulos ACTIVOS (Fase D+): solo con autorización explícita (autorizado=True).
 MODULOS_ACTIVOS = [
     ("cookies", "Flags de Cookies"),
     ("cors", "Configuración CORS"),
     ("inyeccion", "Inyección Reflejada (XSS/SQLi)"),
+    ("open_redirect", "Open Redirect"),
     ("fuzzing", "Fuzzing de Rutas"),
+    ("nuclei", "nuclei (plantillas, externo)"),
+    ("nmap", "nmap --script vuln (externo)"),
+    ("wpscan", "WPScan (externo)"),
 ]
 
 
@@ -101,6 +115,12 @@ def run_scan(
         log.info("  Análisis detenido: el dominio no resuelve.")
         return result
 
+    # Crawler compartido (browsing pasivo): habilita retire.js, secretos e inyección dirigida.
+    crawl = crawler.Crawl()
+    if respuesta is not None:
+        log.info("\n[CRAWLER] Descubriendo URLs, parámetros y scripts\n" + "─" * 48)
+        crawl = _ejecutar_crawler(dominio)
+
     # (nombre -> función del módulo). Solo los que estén activos.
     trabajos: dict[str, Callable[[], list[Finding]]] = {
         "ports": lambda: ports.analizar(info["ip"]),
@@ -111,8 +131,13 @@ def run_scan(
         "disclosure": lambda: disclosure.analizar(dominio),
         "waf": lambda: waf.analizar(respuesta),
         "fingerprint": lambda: fingerprint.analizar(respuesta),
+        "webchecks": lambda: webchecks.analizar(respuesta),
+        "retirejs": lambda: retire_js.analizar_scripts(crawl.scripts),
+        "secrets": lambda: secrets.analizar(dominio, crawl.scripts),
         "cve": lambda: cve.analizar(info.get("producto"), info.get("version")),
         "shodan": lambda: shodan_intel.analizar(info.get("ip")),
+        "subfinder": lambda: external.subfinder(dominio),
+        "testssl": lambda: external.testssl(dominio),
     }
 
     orden = list(MODULOS)
@@ -122,8 +147,12 @@ def run_scan(
             {
                 "cookies": lambda: active.analizar_cookies(respuesta),
                 "cors": lambda: active.analizar_cors(dominio),
-                "inyeccion": lambda: active.analizar_inyeccion(dominio),
+                "inyeccion": lambda: active.analizar_inyeccion(dominio, crawl),
+                "open_redirect": lambda: active.analizar_open_redirect(dominio, crawl),
                 "fuzzing": lambda: active.analizar_fuzzing(dominio),
+                "nuclei": lambda: external.nuclei(dominio),
+                "nmap": lambda: external.nmap(info["ip"]),
+                "wpscan": lambda: external.wpscan(dominio),
             }
         )
         orden = orden + MODULOS_ACTIVOS
@@ -144,7 +173,18 @@ def run_scan(
             log.info("\n[MÓDULO] %s\n%s", etiquetas.get(nombre, nombre), "─" * 48)
             result.findings.extend(resultados[nombre])
 
+    # Post-proceso: priorización (EPSS/KEV) y etiquetado OWASP.
+    enrich.enriquecer(result.findings)
+    owasp.etiquetar(result.findings)
     return result
+
+
+def _ejecutar_crawler(dominio: str) -> crawler.Crawl:
+    try:
+        return crawler.rastrear(dominio)
+    except Exception as e:  # noqa: BLE001
+        log.warning("  [x] Crawler falló: %s", e)
+        return crawler.Crawl()
 
 
 def _run_recon(dominio, respuesta):

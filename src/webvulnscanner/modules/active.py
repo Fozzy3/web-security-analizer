@@ -16,12 +16,14 @@ import logging
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 
+from webvulnscanner.crawler import Crawl
 from webvulnscanner.models import Finding, Risk
 from webvulnscanner.net import HttpResponse, fetch
 
 log = logging.getLogger("webvulnscanner.active")
 
 _MARCADOR = "wvs9z7xq"  # improbable de aparecer por casualidad
+_PARAMS_REDIRECT = ("url", "redirect", "next", "return", "returnUrl", "dest", "destination", "r", "u")
 _ERRORES_SQL = (
     "you have an error in your sql syntax",
     "warning: mysql",
@@ -119,38 +121,90 @@ def analizar_cors(dominio: str) -> list[Finding]:
     return []
 
 
+def _objetivos(crawl: Crawl | None) -> list[tuple[str, str]]:
+    """Lista de (ruta, parámetro) a probar. Usa lo descubierto por el crawler;
+    si no hay crawl, cae a los parámetros genéricos en la raíz."""
+    objetivos: list[tuple[str, str]] = []
+    if crawl and crawl.params:
+        for ruta, params in crawl.params.items():
+            for p in params:
+                objetivos.append((ruta or "/", p))
+    if not objetivos:
+        objetivos = [("/", "q"), ("/", "id"), ("/", "search"), ("/", "page")]
+    return objetivos[:40]  # cota de seguridad
+
+
 # ── Inyección reflejada (XSS / SQLi error-based) ──────────────
-def analizar_inyeccion(dominio: str) -> list[Finding]:
+def analizar_inyeccion(dominio: str, crawl: Crawl | None = None) -> list[Finding]:
     findings: list[Finding] = []
+    xss_payload = f'{_MARCADOR}"<x>'
+    reportado_xss = reportado_sqli = False
 
-    # XSS reflejado: marcador con caracteres crudos < > "
-    payload = f'{_MARCADOR}"<x>'
-    resp = fetch(dominio, f"/?q={urllib.parse.quote(payload)}")
-    if resp and payload in resp.body:
-        findings.append(
-            Finding(
-                "Inyección",
-                "Posible XSS reflejado (parámetro sin sanear)",
-                Risk.ALTO,
-                'El parámetro se refleja en la respuesta sin codificar los caracteres < > ". '
-                "Verifique manualmente la explotabilidad.",
-                evidencia=payload,
-            )
-        )
+    for ruta, param in _objetivos(crawl):
+        if not reportado_xss:
+            r = fetch(dominio, f"{ruta}?{param}={urllib.parse.quote(xss_payload)}")
+            if r and xss_payload in r.body:
+                log.info("  [!!] XSS reflejado en %s (param %s)", ruta, param)
+                findings.append(
+                    Finding(
+                        "Inyección",
+                        f"Posible XSS reflejado en {ruta} (parámetro '{param}')",
+                        Risk.ALTO,
+                        'El parámetro se refleja sin codificar < > ". Verifique la explotabilidad.',
+                        referencia=f"{ruta}?{param}=",
+                        evidencia=xss_payload,
+                    )
+                )
+                reportado_xss = True
+        if not reportado_sqli:
+            r2 = fetch(dominio, f"{ruta}?{param}=1%27")
+            if r2 and any(err in r2.body.lower() for err in _ERRORES_SQL):
+                log.info("  [!!] SQLi error-based en %s (param %s)", ruta, param)
+                findings.append(
+                    Finding(
+                        "Inyección",
+                        f"Posible SQL injection en {ruta} (parámetro '{param}')",
+                        Risk.ALTO,
+                        "Una comilla dispara un error SQL: parámetro no parametrizado. Verifique manualmente.",
+                        referencia=f"{ruta}?{param}=",
+                        evidencia="comilla",
+                    )
+                )
+                reportado_sqli = True
+        if reportado_xss and reportado_sqli:
+            break
+    return findings
 
-    # SQLi error-based: una comilla y buscar errores de motor SQL
-    resp2 = fetch(dominio, "/?id=1%27")
-    if resp2 and any(err in resp2.body.lower() for err in _ERRORES_SQL):
-        findings.append(
-            Finding(
-                "Inyección",
-                "Posible SQL injection (error de motor expuesto)",
-                Risk.ALTO,
-                "Inyectar una comilla provoca un error SQL en la respuesta: el parámetro no está "
-                "parametrizado. Verifique manualmente.",
-                evidencia="comilla en ?id=",
+
+# ── Open redirect ─────────────────────────────────────────────
+def analizar_open_redirect(dominio: str, crawl: Crawl | None = None) -> list[Finding]:
+    findings: list[Finding] = []
+    destino = "https://evil.example/"
+    # Parámetros candidatos: los típicos + los descubiertos que suenen a redirect
+    candidatos = set(_PARAMS_REDIRECT)
+    if crawl:
+        for params in crawl.params.values():
+            candidatos.update(p for p in params if p.lower() in {c.lower() for c in _PARAMS_REDIRECT})
+
+    for param in list(candidatos)[:12]:
+        r = fetch(dominio, f"/?{param}={urllib.parse.quote(destino)}")
+        if r is None:
+            continue
+        location = r.header("location", "") or ""
+        if location.startswith(destino) or location.startswith("//evil.example"):
+            log.info("  [!!] Open redirect vía parámetro %s", param)
+            findings.append(
+                Finding(
+                    "Open Redirect",
+                    f"Posible open redirect (parámetro '{param}')",
+                    Risk.MEDIO,
+                    "El servidor redirige a un destino externo controlado por el atacante "
+                    "(phishing, robo de tokens OAuth). Valide destinos contra una lista blanca.",
+                    referencia=f"/?{param}=",
+                    evidencia=location[:120],
+                )
             )
-        )
+            break
     return findings
 
 

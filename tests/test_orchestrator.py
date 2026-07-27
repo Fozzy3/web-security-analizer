@@ -28,6 +28,13 @@ def _patch_todo(monkeypatch, ip="1.2.3.4"):
         monkeypatch.setattr(
             mod, "analizar", lambda *a, _k=clave: [Finding(_k, f"hallazgo {_k}", Risk.OK, "d")]
         )
+    # Módulos nuevos (evitan red en tests): devuelven vacío.
+    monkeypatch.setattr(orch.webchecks, "analizar", lambda *a: [])
+    monkeypatch.setattr(orch.retire_js, "analizar_scripts", lambda *a: [])
+    monkeypatch.setattr(orch.secrets, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.crawler, "rastrear", lambda *a, **k: orch.crawler.Crawl())
+    for fn in ("subfinder", "testssl", "nuclei", "nmap", "wpscan"):
+        monkeypatch.setattr(orch.external, fn, lambda *a, **k: [])
 
 
 def test_run_scan_ensambla_todos_los_modulos(monkeypatch):
