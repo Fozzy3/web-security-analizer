@@ -97,6 +97,9 @@ make docker                                 # construye webvulnscanner:2.0
 docker run --rm -v "$PWD/reportes:/reports" webvulnscanner:2.0 example.com
 ```
 
+> En entornos con DNS restringido en el build (algunos sandboxes/CI), use
+> `docker build --network=host -t webvulnscanner:2.0 .`
+
 ---
 
 ## Sitios de prueba autorizados
