@@ -152,6 +152,66 @@ def analizar(dominio: str) -> list[Finding]:
             )
         )
 
+    # DNSSEC (presencia de DNSKEY)
+    if _consultar(dominio, "DNSKEY"):
+        findings.append(
+            Finding(
+                "DNS",
+                "DNSSEC habilitado (DNSKEY presente)",
+                Risk.OK,
+                "El dominio firma sus respuestas DNS: protege contra envenenamiento de caché.",
+            )
+        )
+    else:
+        findings.append(
+            Finding(
+                "DNS",
+                "Sin DNSSEC",
+                Risk.BAJO,
+                "El dominio no firma DNS (sin DNSKEY): más expuesto a spoofing/cache poisoning.",
+            )
+        )
+
+    # DKIM: sondeo de selectores comunes
+    selectores = ("default", "google", "selector1", "selector2", "k1", "mail", "dkim", "s1")
+    encontrados = [
+        s
+        for s in selectores
+        if any("v=dkim1" in t.lower() for t in _txt_plano(_consultar(f"{s}._domainkey.{dominio}", "TXT")))
+    ]
+    if encontrados:
+        findings.append(
+            Finding(
+                "DNS",
+                f"DKIM configurado (selectores: {', '.join(encontrados)})",
+                Risk.OK,
+                "El dominio firma su correo con DKIM.",
+                evidencia=", ".join(encontrados),
+            )
+        )
+    elif mx:
+        findings.append(
+            Finding(
+                "DNS",
+                "Sin DKIM en selectores comunes",
+                Risk.BAJO,
+                "No se hallaron claves DKIM en selectores típicos. Puede usar un selector no común.",
+            )
+        )
+
+    # BIMI (opcional, buena práctica de marca)
+    bimi = _txt_plano(_consultar(f"default._bimi.{dominio}", "TXT"))
+    if any("v=bimi1" in t.lower() for t in bimi):
+        findings.append(
+            Finding(
+                "DNS",
+                "BIMI presente",
+                Risk.OK,
+                "Publica logo verificado de marca en correo (requiere DMARC en reject/quarantine).",
+                evidencia=bimi[0] if bimi else None,
+            )
+        )
+
     # AXFR contra cada NS
     ns = [n.rstrip(".") for n in _consultar(dominio, "NS")]
     for servidor in ns:

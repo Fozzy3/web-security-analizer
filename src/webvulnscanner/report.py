@@ -8,6 +8,7 @@ import datetime
 import json
 from pathlib import Path
 
+from webvulnscanner import scoring
 from webvulnscanner.models import Risk, ScanResult
 
 _TITULOS = {
@@ -33,6 +34,8 @@ def render_texto(result: ScanResult, *, timestamp: str | None = None) -> str:
     add(f"  IP         : {result.ip or 'N/A'}")
     add(f"  Servidor   : {result.servidor or 'N/A'}")
     add(f"  Fecha/Hora : {ts}")
+    ltr, pts = scoring.calcular(result)
+    add(f"  Nota       : {ltr}  ({pts}/100)")
     add("=" * 70)
     add("\n  RESUMEN DE HALLAZGOS:")
     add(f"  {Risk.ALTO.emoji} Alto:             {conteo[Risk.ALTO]}")
@@ -72,6 +75,7 @@ def render_texto(result: ScanResult, *, timestamp: str | None = None) -> str:
 def render_json(result: ScanResult, *, timestamp: str | None = None) -> str:
     ts = timestamp or datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conteo = {r.value: n for r, n in result.conteo().items()}
+    ltr, pts = scoring.calcular(result)
     payload = {
         "meta": {
             "herramienta": "WebVulnScanner 2.0",
@@ -79,6 +83,8 @@ def render_json(result: ScanResult, *, timestamp: str | None = None) -> str:
             "ip": result.ip,
             "servidor": result.servidor,
             "timestamp": ts,
+            "nota": ltr,
+            "puntaje": pts,
         },
         "resumen": conteo,
         "hallazgos": [h.to_dict() for h in result.findings],

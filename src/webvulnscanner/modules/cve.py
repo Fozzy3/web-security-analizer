@@ -19,13 +19,37 @@ from webvulnscanner.net import USER_AGENT
 log = logging.getLogger("webvulnscanner.cve")
 
 _TTL = 21_600  # 6 h
+_BASE = "https://services.nvd.nist.gov/rest/json/cves/2.0?{param}&resultsPerPage=50"
 
-# ponytail: keyword search (no CPE), puede traer falsos positivos de productos
-# con nombre parecido. Techo conocido; subir a matching por CPE si se requiere precisión.
-_NVD = "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={q}&resultsPerPage=50"
+# Producto detectado (cabecera Server/banner) -> (vendor, product) en el diccionario CPE
+# del NVD. Con esto se hace matching por CPE exacto en vez de keyword, lo que elimina
+# los falsos positivos de productos con nombre parecido.
+_CPE = {
+    "apache": ("apache", "http_server"),
+    "nginx": ("f5", "nginx"),
+    "openssh": ("openbsd", "openssh"),
+    "microsoft-iis": ("microsoft", "internet_information_services"),
+    "iis": ("microsoft", "internet_information_services"),
+    "lighttpd": ("lighttpd", "lighttpd"),
+    "tomcat": ("apache", "tomcat"),
+    "postfix": ("postfix", "postfix"),
+    "exim": ("exim", "exim"),
+    "proftpd": ("proftpd", "proftpd"),
+    "vsftpd": ("beasts", "vsftpd"),
+}
 
 # CVSS baseSeverity -> Risk
 _SEVERIDAD = {"CRITICAL": Risk.ALTO, "HIGH": Risk.ALTO, "MEDIUM": Risk.MEDIO, "LOW": Risk.BAJO}
+
+
+def _construir_param(producto: str, version: str) -> tuple[str, str]:
+    """Devuelve (query_param, modo). Usa CPE exacto si el producto está mapeado."""
+    clave = producto.lower()
+    if clave in _CPE:
+        vendor, prod = _CPE[clave]
+        cpe = f"cpe:2.3:a:{vendor}:{prod}:{version}:*:*:*:*:*:*:*"
+        return "virtualMatchString=" + urllib.parse.quote(cpe), "cpe"
+    return "keywordSearch=" + urllib.parse.quote(f"{producto} {version}"), "keyword"
 
 
 def _score(cve: dict) -> float:
@@ -47,8 +71,9 @@ def _severidad(cve: dict) -> str:
 
 
 def _descargar_nvd(producto: str, version: str, timeout: int) -> dict:
-    q = urllib.parse.quote(f"{producto} {version}")
-    req = urllib.request.Request(_NVD.format(q=q), headers={"User-Agent": USER_AGENT})
+    param, modo = _construir_param(producto, version)
+    log.info("  [i] NVD via %s", modo)
+    req = urllib.request.Request(_BASE.format(param=param), headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8", errors="replace"))
@@ -114,7 +139,7 @@ def analizar(producto: str | None, version: str | None) -> list[Finding]:
                 nivel,
                 c["resumen"] or "Sin descripción.",
                 referencia=f"https://nvd.nist.gov/vuln/detail/{c['id']}",
-                evidencia=f"keyword: {producto} {version}",
+                evidencia=f"match: {producto} {version}",
             )
         )
     return findings

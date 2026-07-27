@@ -15,6 +15,9 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+
 from webvulnscanner.models import Finding, Risk
 from webvulnscanner.net import TIMEOUT, USER_AGENT
 
@@ -51,11 +54,24 @@ def _probar_version(dominio: str, version: ssl.TLSVersion) -> str | None:
         return None
 
 
+# Fragmentos que delatan un cipher realmente débil en el nombre OpenSSL.
+_DEBILES = ("RC4", "3DES", "DES-", "-DES", "MD5", "NULL", "EXP", "EXPORT", "ADH", "AECDH")
+
+
 def _cipher_debil(dominio: str) -> str | None:
-    """Intenta negociar un cipher débil (RC4/3DES/DES/EXPORT/NULL)."""
+    """Intenta negociar un cipher débil (RC4/3DES/DES/EXPORT/NULL).
+
+    Se capa a TLS 1.2: la cadena de ciphers de OpenSSL NO aplica a TLS 1.3 (que
+    usa suites AEAD fuertes propias), así que sin este cap un servidor moderno
+    negociaría un cipher fuerte y daría un falso positivo.
+    """
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
+    try:
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+    except (ValueError, OSError):
+        return None
     try:
         ctx.set_ciphers("RC4:3DES:DES:MD5:aNULL:eNULL:EXPORT")
     except ssl.SSLError:
@@ -66,9 +82,71 @@ def _cipher_debil(dominio: str) -> str | None:
             ctx.wrap_socket(sock, server_hostname=dominio) as ss,
         ):
             info = ss.cipher()
-            return info[0] if info else None
     except (ssl.SSLError, OSError):
         return None
+    if not info:
+        return None
+    nombre = info[0]
+    # Confirmar que el cipher negociado es genuinamente débil.
+    return nombre if any(frag in nombre.upper() for frag in _DEBILES) else None
+
+
+def _analizar_clave(dominio: str) -> list[Finding]:
+    """Parsea el certificado (aun si no valida) para evaluar la fuerza de la
+    clave y el algoritmo de firma."""
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        with (
+            socket.create_connection((dominio, 443), timeout=TIMEOUT) as sock,
+            ctx.wrap_socket(sock, server_hostname=dominio) as ss,
+        ):
+            der = ss.getpeercert(binary_form=True)
+    except (OSError, ssl.SSLError):
+        return []
+    if not der:
+        return []
+
+    cert = x509.load_der_x509_certificate(der)
+    findings: list[Finding] = []
+
+    sig = cert.signature_hash_algorithm
+    if sig and sig.name.lower() in ("md5", "sha1"):
+        log.info("  [!] Firma de certificado débil: %s", sig.name)
+        findings.append(
+            Finding(
+                "TLS/HTTPS",
+                f"Certificado firmado con algoritmo débil ({sig.name.upper()})",
+                Risk.ALTO,
+                "Las firmas MD5/SHA-1 son susceptibles a colisiones. Reemita el certificado con SHA-256+.",
+                evidencia=sig.name,
+            )
+        )
+
+    pub = cert.public_key()
+    if isinstance(pub, rsa.RSAPublicKey):
+        bits = pub.key_size
+        if bits < 2048:
+            nivel, desc = Risk.ALTO, f"Clave RSA de {bits} bits: por debajo del mínimo seguro (2048)."
+        else:
+            nivel, desc = Risk.OK, f"Clave RSA de {bits} bits (adecuada)."
+        log.info("  [+] Clave RSA %d bits", bits)
+        findings.append(Finding("TLS/HTTPS", f"Clave RSA {bits} bits", nivel, desc, evidencia=str(bits)))
+    elif isinstance(pub, ec.EllipticCurvePublicKey):
+        curva = pub.curve.name
+        log.info("  [+] Clave EC %s", curva)
+        findings.append(
+            Finding(
+                "TLS/HTTPS",
+                f"Clave de curva elíptica ({curva})",
+                Risk.OK,
+                "Clave ECC moderna y eficiente.",
+                evidencia=curva,
+            )
+        )
+
+    return findings
 
 
 def _analizar_certificado(dominio: str) -> list[Finding]:
@@ -234,8 +312,9 @@ def analizar(dominio: str) -> list[Finding]:
             )
         )
 
-    # 3. Certificado
+    # 3. Certificado (validez/CN/SAN) + fuerza de clave/firma
     findings.extend(_analizar_certificado(dominio))
+    findings.extend(_analizar_clave(dominio))
 
     # 4. Redirección
     redir = _redireccion_https(dominio)

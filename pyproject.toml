@@ -12,6 +12,7 @@ authors = [{ name = "fozzy3" }]
 license = { text = "MIT" }
 dependencies = [
     "dnspython>=2.6",
+    "cryptography>=42.0",
 ]
 
 [project.optional-dependencies]
