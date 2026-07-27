@@ -9,10 +9,11 @@ from pathlib import Path
 
 from webvulnscanner import __version__, diff, sarif
 from webvulnscanner.models import Risk
-from webvulnscanner.orchestrator import MODULOS, run_scan
+from webvulnscanner.orchestrator import MODULOS, MODULOS_ACTIVOS, run_scan
 from webvulnscanner.report import guardar, render_texto
 
 _MODULOS_VALIDOS = [n for n, _ in MODULOS]
+_MODULOS_ACTIVOS = [n for n, _ in MODULOS_ACTIVOS]
 
 # Perfiles de escaneo (C5): subconjuntos de módulos para casos comunes.
 _PERFILES = {
@@ -39,6 +40,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("-o", "--output", default=".", metavar="DIR", help="carpeta de reportes (def: .)")
     p.add_argument("--sarif", action="store_true", help="además, escribir reporte .sarif (CI/GitHub)")
     p.add_argument("--diff", metavar="PREV.json", help="comparar contra un reporte .json anterior")
+    p.add_argument(
+        "--authorized",
+        action="store_true",
+        help="habilita módulos ACTIVOS (cookies, CORS, XSS/SQLi, fuzzing). "
+        "SOLO en objetivos propios o con autorización expresa.",
+    )
     p.add_argument("--no-save", action="store_true", help="no escribir archivos, solo consola")
     p.add_argument("--no-parallel", action="store_true", help="ejecutar módulos en secuencia")
     p.add_argument("-q", "--quiet", action="store_true", help="silenciar el log de progreso")
@@ -46,15 +53,16 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def _resolver_activos(profile: str | None, only: str | None, skip: str | None) -> set[str]:
-    activos = set(_PERFILES[profile]) if profile else set(_MODULOS_VALIDOS)
+def _resolver_activos(profile: str | None, only: str | None, skip: str | None, autorizado: bool) -> set[str]:
+    base = set(_MODULOS_VALIDOS) | (set(_MODULOS_ACTIVOS) if autorizado else set())
+    activos = set(_PERFILES[profile]) if profile else set(base)
     if only:
         activos = {m.strip() for m in only.split(",") if m.strip()}
     if skip:
         activos -= {m.strip() for m in skip.split(",") if m.strip()}
-    invalidos = activos - set(_MODULOS_VALIDOS)
+    invalidos = activos - base
     if invalidos:
-        raise SystemExit(f"Módulos desconocidos: {', '.join(invalidos)}")
+        raise SystemExit(f"Módulos desconocidos o no autorizados: {', '.join(invalidos)}")
     return activos
 
 
@@ -72,13 +80,15 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: debe indicar un dominio.", file=sys.stderr)
         return 1
 
-    activos = _resolver_activos(args.profile, args.only, args.skip)
+    activos = _resolver_activos(args.profile, args.only, args.skip, args.authorized)
 
     print("\n" + "=" * 60)
-    print("  WebVulnScanner 2.0 — Auditoría pasiva de seguridad web")
+    print("  WebVulnScanner 2.0 — Auditoría de seguridad web")
+    if args.authorized:
+        print("  ⚠ MODO ACTIVO — solo para objetivos autorizados")
     print("=" * 60)
 
-    result = run_scan(dominio, activos=activos, paralelo=not args.no_parallel)
+    result = run_scan(dominio, activos=activos, paralelo=not args.no_parallel, autorizado=args.authorized)
 
     print("\n" + render_texto(result))
 

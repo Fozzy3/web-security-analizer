@@ -41,15 +41,23 @@ def _contexto_inseguro() -> ssl.SSLContext:
     return ctx
 
 
-def fetch(dominio: str, ruta: str = "/", *, max_body: int = 200_000) -> HttpResponse | None:
+def fetch(
+    dominio: str,
+    ruta: str = "/",
+    *,
+    max_body: int = 200_000,
+    cabeceras_extra: dict[str, str] | None = None,
+) -> HttpResponse | None:
     """Descarga una URL probando HTTPS y luego HTTP. Devuelve None si ambos fallan.
 
     No sigue el body más allá de `max_body` para no cargar páginas enormes.
+    `cabeceras_extra` permite añadir headers (p.ej. Origin para probar CORS).
     """
+    headers_req = {"User-Agent": USER_AGENT, **(cabeceras_extra or {})}
     for esquema in ("https", "http"):
         url = f"{esquema}://{dominio}{ruta}"
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            req = urllib.request.Request(url, headers=headers_req)
             ctx = _contexto_inseguro() if esquema == "https" else None
             with urllib.request.urlopen(req, timeout=TIMEOUT, context=ctx) as resp:
                 body = resp.read(max_body).decode("utf-8", errors="replace")
