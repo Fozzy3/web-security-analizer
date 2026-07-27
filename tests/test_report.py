@@ -35,8 +35,24 @@ def test_render_json_valido_y_completo():
     assert js["hallazgos"][0]["riesgo"] == "alto"
 
 
-def test_guardar_escribe_dos_archivos(tmp_path):
-    txt, jsp = report.guardar(_result(), tmp_path)
-    assert txt.exists() and jsp.exists()
-    assert txt.suffix == ".txt" and jsp.suffix == ".json"
+def test_guardar_escribe_tres_archivos(tmp_path):
+    txt, jsp, htm = report.guardar(_result(), tmp_path)
+    assert txt.exists() and jsp.exists() and htm.exists()
+    assert txt.suffix == ".txt" and jsp.suffix == ".json" and htm.suffix == ".html"
     json.loads(jsp.read_text(encoding="utf-8"))  # no lanza
+    assert "<!doctype html>" in htm.read_text(encoding="utf-8").lower()
+
+
+def test_html_escapa_contenido_remoto():
+    from webvulnscanner import html as html_report
+    from webvulnscanner.models import Finding, Risk, ScanResult
+
+    malicioso = ScanResult(
+        "x.com",
+        findings=[
+            Finding("M", "<script>alert(1)</script>", Risk.ALTO, "desc <img src=x onerror=y>"),
+        ],
+    )
+    out = html_report.render(malicioso)
+    assert "<script>alert(1)</script>" not in out
+    assert "&lt;script&gt;" in out

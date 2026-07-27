@@ -8,6 +8,7 @@ import datetime
 import json
 from pathlib import Path
 
+from webvulnscanner import html as html_report
 from webvulnscanner import scoring
 from webvulnscanner.models import Risk, ScanResult
 
@@ -92,14 +93,16 @@ def render_json(result: ScanResult, *, timestamp: str | None = None) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def guardar(result: ScanResult, destino: Path | str = ".") -> tuple[Path, Path]:
-    """Escribe .txt y .json y devuelve sus rutas. Única función con I/O."""
+def guardar(result: ScanResult, destino: Path | str = ".") -> tuple[Path, Path, Path]:
+    """Escribe .txt, .json y .html y devuelve sus rutas. Única función con I/O."""
     destino = Path(destino)
     destino.mkdir(parents=True, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     base = f"reporte_{result.dominio.replace('.', '_')}_{datetime.datetime.now():%Y%m%d_%H%M%S}"
     ruta_txt = destino / f"{base}.txt"
     ruta_json = destino / f"{base}.json"
+    ruta_html = destino / f"{base}.html"
     ruta_txt.write_text(render_texto(result, timestamp=ts), encoding="utf-8")
     ruta_json.write_text(render_json(result, timestamp=ts), encoding="utf-8")
-    return ruta_txt, ruta_json
+    ruta_html.write_text(html_report.render(result, timestamp=ts), encoding="utf-8")
+    return ruta_txt, ruta_json, ruta_html

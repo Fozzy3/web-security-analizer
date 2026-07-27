@@ -65,6 +65,17 @@ class Finding:
             "evidencia": self.evidencia,
         }
 
+    @classmethod
+    def from_dict(cls, d: dict) -> Finding:
+        return cls(
+            modulo=d["modulo"],
+            hallazgo=d["hallazgo"],
+            riesgo=Risk(d["riesgo"]),
+            descripcion=d.get("descripcion", ""),
+            referencia=d.get("referencia"),
+            evidencia=d.get("evidencia"),
+        )
+
 
 @dataclass
 class ScanResult:
@@ -83,3 +94,14 @@ class ScanResult:
 
     def conteo(self) -> dict[Risk, int]:
         return {r: len(items) for r, items in self.por_riesgo().items()}
+
+    @classmethod
+    def from_json(cls, payload: dict) -> ScanResult:
+        """Reconstruye un ScanResult desde un reporte .json previo."""
+        meta = payload.get("meta", {})
+        return cls(
+            dominio=meta.get("dominio", "?"),
+            ip=meta.get("ip"),
+            servidor=meta.get("servidor"),
+            findings=[Finding.from_dict(h) for h in payload.get("hallazgos", [])],
+        )

@@ -5,12 +5,23 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 
-from webvulnscanner import __version__
+from webvulnscanner import __version__, diff, sarif
+from webvulnscanner.models import Risk
 from webvulnscanner.orchestrator import MODULOS, run_scan
 from webvulnscanner.report import guardar, render_texto
 
 _MODULOS_VALIDOS = [n for n, _ in MODULOS]
+
+# Perfiles de escaneo (C5): subconjuntos de módulos para casos comunes.
+_PERFILES = {
+    "full": set(_MODULOS_VALIDOS),
+    "quick": {"recon", "tls", "headers", "waf", "fingerprint"},
+    "tls": {"recon", "tls"},
+    "web": {"recon", "headers", "waf", "fingerprint", "disclosure"},
+    "dns": {"recon", "dns", "subdomains"},
+}
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -20,19 +31,23 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         epilog="Solo analice sitios propios o con autorización expresa.",
     )
     p.add_argument("dominio", nargs="?", help="dominio objetivo (ej: example.com)")
+    p.add_argument("--profile", choices=sorted(_PERFILES), help="perfil de escaneo (def: full)")
     p.add_argument(
         "--only", metavar="MODS", help=f"solo estos módulos (coma). Disponibles: {','.join(_MODULOS_VALIDOS)}"
     )
     p.add_argument("--skip", metavar="MODS", help="omitir estos módulos (coma)")
     p.add_argument("-o", "--output", default=".", metavar="DIR", help="carpeta de reportes (def: .)")
+    p.add_argument("--sarif", action="store_true", help="además, escribir reporte .sarif (CI/GitHub)")
+    p.add_argument("--diff", metavar="PREV.json", help="comparar contra un reporte .json anterior")
     p.add_argument("--no-save", action="store_true", help="no escribir archivos, solo consola")
+    p.add_argument("--no-parallel", action="store_true", help="ejecutar módulos en secuencia")
     p.add_argument("-q", "--quiet", action="store_true", help="silenciar el log de progreso")
     p.add_argument("--version", action="version", version=f"WebVulnScanner {__version__}")
     return p.parse_args(argv)
 
 
-def _resolver_activos(only: str | None, skip: str | None) -> set[str]:
-    activos = set(_MODULOS_VALIDOS)
+def _resolver_activos(profile: str | None, only: str | None, skip: str | None) -> set[str]:
+    activos = set(_PERFILES[profile]) if profile else set(_MODULOS_VALIDOS)
     if only:
         activos = {m.strip() for m in only.split(",") if m.strip()}
     if skip:
@@ -57,23 +72,29 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: debe indicar un dominio.", file=sys.stderr)
         return 1
 
-    activos = _resolver_activos(args.only, args.skip)
+    activos = _resolver_activos(args.profile, args.only, args.skip)
 
     print("\n" + "=" * 60)
     print("  WebVulnScanner 2.0 — Auditoría pasiva de seguridad web")
     print("=" * 60)
 
-    result = run_scan(dominio, activos=activos)
+    result = run_scan(dominio, activos=activos, paralelo=not args.no_parallel)
 
     print("\n" + render_texto(result))
 
+    if args.diff:
+        anterior = diff.cargar_reporte(args.diff)
+        print("\n" + diff.render_texto(diff.comparar(anterior, result)))
+
     if not args.no_save:
-        txt, js = guardar(result, args.output)
-        print(f"  Reportes guardados:\n  → {txt}\n  → {js}")
+        txt, js, htm = guardar(result, args.output)
+        print(f"  Reportes guardados:\n  → {txt}\n  → {js}\n  → {htm}")
+        if args.sarif:
+            ruta_sarif = Path(txt).with_suffix(".sarif")
+            ruta_sarif.write_text(sarif.render(result), encoding="utf-8")
+            print(f"  → {ruta_sarif}")
 
     # Código de salida distinto de 0 si hay hallazgos de riesgo alto.
-    from webvulnscanner.models import Risk
-
     return 2 if result.conteo()[Risk.ALTO] else 0
 
 
