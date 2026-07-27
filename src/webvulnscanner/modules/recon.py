@@ -24,7 +24,7 @@ def resolver_ips(dominio: str) -> dict[str, list[str]]:
     ips: dict[str, list[str]] = {"ipv4": [], "ipv6": []}
     try:
         for fam, *_rest, sockaddr in socket.getaddrinfo(dominio, None):
-            addr = sockaddr[0]
+            addr = str(sockaddr[0])
             if fam == socket.AF_INET and addr not in ips["ipv4"]:
                 ips["ipv4"].append(addr)
             elif fam == socket.AF_INET6 and addr not in ips["ipv6"]:
@@ -53,21 +53,27 @@ def analizar(dominio: str, respuesta: HttpResponse | None) -> tuple[list[Finding
 
     if not todas:
         log.info("  [-] No se pudo resolver el dominio: %s", dominio)
-        findings.append(Finding(
-            "Reconocimiento", f"No se pudo resolver el dominio '{dominio}'", Risk.ALTO,
-            "El dominio no resuelve a ninguna IP. Verifique que sea correcto.",
-        ))
+        findings.append(
+            Finding(
+                "Reconocimiento",
+                f"No se pudo resolver el dominio '{dominio}'",
+                Risk.ALTO,
+                "El dominio no resuelve a ninguna IP. Verifique que sea correcto.",
+            )
+        )
         return findings, info
 
     info["ip"] = ips["ipv4"][0] if ips["ipv4"] else ips["ipv6"][0]
     log.info("  [+] IPv4: %s | IPv6: %s", ips["ipv4"] or "—", ips["ipv6"] or "—")
-    findings.append(Finding(
-        "Reconocimiento",
-        f"Dominio resuelve a {len(todas)} IP(s): {', '.join(todas)}",
-        Risk.INFO,
-        "Resolución DNS exitosa. Las IPs públicas sirven para reconocimiento adicional.",
-        evidencia=", ".join(todas),
-    ))
+    findings.append(
+        Finding(
+            "Reconocimiento",
+            f"Dominio resuelve a {len(todas)} IP(s): {', '.join(todas)}",
+            Risk.INFO,
+            "Resolución DNS exitosa. Las IPs públicas sirven para reconocimiento adicional.",
+            evidencia=", ".join(todas),
+        )
+    )
 
     if not respuesta:
         return findings, info
@@ -82,21 +88,30 @@ def analizar(dominio: str, respuesta: HttpResponse | None) -> tuple[list[Finding
             riesgo, extra = Risk.MEDIO, " Expone producto y versión exactos, útil para buscar CVEs."
         else:
             riesgo, extra = Risk.BAJO, ""
-        findings.append(Finding(
-            "Reconocimiento", f"Servidor web: {servidor}", riesgo,
-            "La cabecera 'Server' revela el software del servidor." + extra
-            + " Se recomienda ocultarla o generalizarla.",
-            evidencia=servidor,
-        ))
+        findings.append(
+            Finding(
+                "Reconocimiento",
+                f"Servidor web: {servidor}",
+                riesgo,
+                "La cabecera 'Server' revela el software del servidor."
+                + extra
+                + " Se recomienda ocultarla o generalizarla.",
+                evidencia=servidor,
+            )
+        )
 
     powered = respuesta.header("x-powered-by")
     if powered:
         info["x_powered_by"] = powered
         log.info("  [!] X-Powered-By: %s", powered)
-        findings.append(Finding(
-            "Reconocimiento", f"Tecnología expuesta (X-Powered-By): {powered}", Risk.MEDIO,
-            "Expone lenguaje/framework del backend (ej. PHP/7.4), facilitando ataques dirigidos.",
-            evidencia=powered,
-        ))
+        findings.append(
+            Finding(
+                "Reconocimiento",
+                f"Tecnología expuesta (X-Powered-By): {powered}",
+                Risk.MEDIO,
+                "Expone lenguaje/framework del backend (ej. PHP/7.4), facilitando ataques dirigidos.",
+                evidencia=powered,
+            )
+        )
 
     return findings, info

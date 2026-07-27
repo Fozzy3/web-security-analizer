@@ -8,9 +8,8 @@ que el servicio anuncia).
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
 import socket
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from webvulnscanner.models import Finding, Risk
 from webvulnscanner.net import leer_banner
@@ -18,18 +17,43 @@ from webvulnscanner.net import leer_banner
 log = logging.getLogger("webvulnscanner.ports")
 
 PUERTOS_COMUNES = {
-    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS", 80: "HTTP",
-    110: "POP3", 143: "IMAP", 443: "HTTPS", 445: "SMB", 3306: "MySQL",
-    3389: "RDP", 5432: "PostgreSQL", 6379: "Redis", 8080: "HTTP-Alt",
-    8443: "HTTPS-Alt", 27017: "MongoDB",
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    53: "DNS",
+    80: "HTTP",
+    110: "POP3",
+    143: "IMAP",
+    443: "HTTPS",
+    445: "SMB",
+    3306: "MySQL",
+    3389: "RDP",
+    5432: "PostgreSQL",
+    6379: "Redis",
+    8080: "HTTP-Alt",
+    8443: "HTTPS-Alt",
+    27017: "MongoDB",
 }
 
 PUERTOS_RIESGO = {
-    21: Risk.ALTO, 23: Risk.ALTO, 3306: Risk.ALTO, 3389: Risk.ALTO,
-    5432: Risk.ALTO, 6379: Risk.ALTO, 27017: Risk.ALTO, 445: Risk.ALTO,
-    25: Risk.MEDIO, 110: Risk.MEDIO, 143: Risk.MEDIO,
-    22: Risk.BAJO, 53: Risk.BAJO, 8080: Risk.BAJO, 8443: Risk.BAJO,
-    80: Risk.INFO, 443: Risk.INFO,
+    21: Risk.ALTO,
+    23: Risk.ALTO,
+    3306: Risk.ALTO,
+    3389: Risk.ALTO,
+    5432: Risk.ALTO,
+    6379: Risk.ALTO,
+    27017: Risk.ALTO,
+    445: Risk.ALTO,
+    25: Risk.MEDIO,
+    110: Risk.MEDIO,
+    143: Risk.MEDIO,
+    22: Risk.BAJO,
+    53: Risk.BAJO,
+    8080: Risk.BAJO,
+    8443: Risk.BAJO,
+    80: Risk.INFO,
+    443: Risk.INFO,
 }
 
 # Sondas mínimas para provocar respuesta en servicios que no hablan primero.
@@ -77,23 +101,36 @@ def analizar(ip: str, *, timeout: float = 1.5, grab_banners: bool = True) -> lis
 
     if not abiertos:
         log.info("  [-] Sin puertos abiertos en la lista analizada")
-        return [Finding(
-            "Escaneo de Puertos", "No se encontraron puertos abiertos", Risk.INFO,
-            "El servidor no responde a los puertos comunes. Puede tener firewall.",
-        )]
+        return [
+            Finding(
+                "Escaneo de Puertos",
+                "No se encontraron puertos abiertos",
+                Risk.INFO,
+                "El servidor no responde a los puertos comunes. Puede tener firewall.",
+            )
+        ]
 
     for puerto in sorted(abiertos):
         servicio = PUERTOS_COMUNES[puerto]
         nivel = PUERTOS_RIESGO.get(puerto, Risk.MEDIO)
         banner = leer_banner(ip, puerto, enviar=_SONDAS.get(puerto)) if grab_banners else None
-        log.info("  [+] %d/TCP abierto → %s [%s]%s",
-                 puerto, servicio, nivel.value.upper(),
-                 f"  banner: {banner[:60]}" if banner else "")
+        log.info(
+            "  [+] %d/TCP abierto → %s [%s]%s",
+            puerto,
+            servicio,
+            nivel.value.upper(),
+            f"  banner: {banner[:60]}" if banner else "",
+        )
         desc = _DESCRIPCIONES.get(puerto, f"Puerto {puerto} ({servicio}) abierto.")
         if banner:
             desc += f" Banner detectado: «{banner.splitlines()[0][:120]}»."
-        findings.append(Finding(
-            "Escaneo de Puertos", f"Puerto {puerto}/TCP abierto ({servicio})", nivel,
-            desc, evidencia=banner,
-        ))
+        findings.append(
+            Finding(
+                "Escaneo de Puertos",
+                f"Puerto {puerto}/TCP abierto ({servicio})",
+                nivel,
+                desc,
+                evidencia=banner,
+            )
+        )
     return findings

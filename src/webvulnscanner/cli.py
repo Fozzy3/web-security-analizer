@@ -20,8 +20,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         epilog="Solo analice sitios propios o con autorización expresa.",
     )
     p.add_argument("dominio", nargs="?", help="dominio objetivo (ej: example.com)")
-    p.add_argument("--only", metavar="MODS",
-                   help=f"solo estos módulos (coma). Disponibles: {','.join(_MODULOS_VALIDOS)}")
+    p.add_argument(
+        "--only", metavar="MODS", help=f"solo estos módulos (coma). Disponibles: {','.join(_MODULOS_VALIDOS)}"
+    )
     p.add_argument("--skip", metavar="MODS", help="omitir estos módulos (coma)")
     p.add_argument("-o", "--output", default=".", metavar="DIR", help="carpeta de reportes (def: .)")
     p.add_argument("--no-save", action="store_true", help="no escribir archivos, solo consola")
@@ -47,7 +48,8 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(
         level=logging.WARNING if args.quiet else logging.INFO,
-        format="%(message)s", stream=sys.stdout,
+        format="%(message)s",
+        stream=sys.stdout,
     )
 
     dominio = args.dominio or input("\n  Dominio objetivo (ej: example.com): ").strip()
@@ -71,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Código de salida distinto de 0 si hay hallazgos de riesgo alto.
     from webvulnscanner.models import Risk
+
     return 2 if result.conteo()[Risk.ALTO] else 0
 
 

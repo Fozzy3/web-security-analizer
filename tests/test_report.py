@@ -1,15 +1,20 @@
 import json
 
-from webvulnscanner.models import Finding, Risk, ScanResult
 from webvulnscanner import report
+from webvulnscanner.models import Finding, Risk, ScanResult
 
 
 def _result():
-    return ScanResult("ej.com", ip="1.2.3.4", servidor="nginx", findings=[
-        Finding("TLS/HTTPS", "Certificado expirado", Risk.ALTO, "grave", referencia="http://ref"),
-        Finding("Headers HTTP", "HSTS presente", Risk.OK, "bien"),
-        Finding("Reconocimiento", "IP resuelta", Risk.INFO, "info"),
-    ])
+    return ScanResult(
+        "ej.com",
+        ip="1.2.3.4",
+        servidor="nginx",
+        findings=[
+            Finding("TLS/HTTPS", "Certificado expirado", Risk.ALTO, "grave", referencia="http://ref"),
+            Finding("Headers HTTP", "HSTS presente", Risk.OK, "bien"),
+            Finding("Reconocimiento", "IP resuelta", Risk.INFO, "info"),
+        ],
+    )
 
 
 def test_render_texto_incluye_secciones_y_conteo():

@@ -1,8 +1,8 @@
 """Tests de la lógica pura de parsing (sin red)."""
 
 from webvulnscanner.models import Risk
+from webvulnscanner.modules import fingerprint, headers, recon, waf
 from webvulnscanner.net import HttpResponse
-from webvulnscanner.modules import headers, recon, waf, fingerprint
 
 
 def _resp(hdrs=None, body="", status=200):

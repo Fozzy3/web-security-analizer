@@ -43,10 +43,22 @@ def analizar(respuesta: HttpResponse | None) -> list[Finding]:
     detectados = detectar(respuesta.headers)
     if not detectados:
         log.info("  [+] No se detectó WAF/CDN conocido")
-        return [Finding("WAF/CDN", "No se detectó WAF/CDN conocido", Risk.INFO,
-                        "No hay firmas de WAF/CDN comunes. El origen puede estar directamente expuesto.")]
+        return [
+            Finding(
+                "WAF/CDN",
+                "No se detectó WAF/CDN conocido",
+                Risk.INFO,
+                "No hay firmas de WAF/CDN comunes. El origen puede estar directamente expuesto.",
+            )
+        ]
     log.info("  [+] WAF/CDN: %s", ", ".join(detectados))
-    return [Finding("WAF/CDN", f"Protegido por: {', '.join(detectados)}", Risk.INFO,
-                    "Hay un WAF/CDN delante del origen. Las IPs observadas son del proveedor, "
-                    "no necesariamente del servidor real.",
-                    evidencia=", ".join(detectados))]
+    return [
+        Finding(
+            "WAF/CDN",
+            f"Protegido por: {', '.join(detectados)}",
+            Risk.INFO,
+            "Hay un WAF/CDN delante del origen. Las IPs observadas son del proveedor, "
+            "no necesariamente del servidor real.",
+            evidencia=", ".join(detectados),
+        )
+    ]

@@ -17,16 +17,19 @@ import threading
 
 import customtkinter as ctk
 
+from webvulnscanner import report
 from webvulnscanner.models import Risk
 from webvulnscanner.orchestrator import run_scan
-from webvulnscanner import report
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 COLORES_NIVEL = {
-    "alto": "#ef4444", "medio": "#f59e0b", "bajo": "#22c55e",
-    "info": "#3b82f6", "ok": "#10b981",
+    "alto": "#ef4444",
+    "medio": "#f59e0b",
+    "bajo": "#22c55e",
+    "info": "#3b82f6",
+    "ok": "#10b981",
 }
 EMOJIS_NIVEL = {"alto": "🔴", "medio": "🟡", "bajo": "🟢", "info": "🔵", "ok": "✅"}
 
@@ -67,10 +70,18 @@ class App(ctk.CTk):
         header = ctk.CTkFrame(self, height=64, corner_radius=0, fg_color="#1e293b")
         header.pack(fill="x")
         header.pack_propagate(False)
-        ctk.CTkLabel(header, text="🔍  WebVulnScanner 2.0",
-                     font=ctk.CTkFont(size=22, weight="bold"), text_color="#f8fafc").pack(side="left", padx=20)
-        ctk.CTkLabel(header, text="Auditoría pasiva · TLS · DNS · Subdominios · CVEs",
-                     font=ctk.CTkFont(size=12), text_color="#94a3b8").pack(side="left", padx=4)
+        ctk.CTkLabel(
+            header,
+            text="🔍  WebVulnScanner 2.0",
+            font=ctk.CTkFont(size=22, weight="bold"),
+            text_color="#f8fafc",
+        ).pack(side="left", padx=20)
+        ctk.CTkLabel(
+            header,
+            text="Auditoría pasiva · TLS · DNS · Subdominios · CVEs",
+            font=ctk.CTkFont(size=12),
+            text_color="#94a3b8",
+        ).pack(side="left", padx=4)
 
         bar = ctk.CTkFrame(self, height=58, fg_color="#0f172a")
         bar.pack(fill="x")
@@ -79,12 +90,26 @@ class App(ctk.CTk):
         self.entry = ctk.CTkEntry(bar, placeholder_text="ej: example.com", width=340, height=34)
         self.entry.pack(side="left", padx=(0, 10))
         self.entry.bind("<Return>", lambda _e: self._iniciar())
-        self.btn_scan = ctk.CTkButton(bar, text="▶  Escanear", width=130, height=34,
-                                      font=ctk.CTkFont(size=13, weight="bold"), command=self._iniciar)
+        self.btn_scan = ctk.CTkButton(
+            bar,
+            text="▶  Escanear",
+            width=130,
+            height=34,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._iniciar,
+        )
         self.btn_scan.pack(side="left")
-        self.btn_open = ctk.CTkButton(bar, text="📂  Abrir carpeta", width=140, height=34,
-                                      font=ctk.CTkFont(size=12), fg_color="#334155", hover_color="#475569",
-                                      state="disabled", command=self._abrir_carpeta)
+        self.btn_open = ctk.CTkButton(
+            bar,
+            text="📂  Abrir carpeta",
+            width=140,
+            height=34,
+            font=ctk.CTkFont(size=12),
+            fg_color="#334155",
+            hover_color="#475569",
+            state="disabled",
+            command=self._abrir_carpeta,
+        )
         self.btn_open.pack(side="left", padx=(10, 0))
         self.lbl_estado = ctk.CTkLabel(bar, text="", font=ctk.CTkFont(size=11), text_color="#64748b")
         self.lbl_estado.pack(side="left", padx=14)
@@ -99,8 +124,9 @@ class App(ctk.CTk):
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         left.rowconfigure(1, weight=1)
         left.columnconfigure(0, weight=1)
-        ctk.CTkLabel(left, text="Progreso del escaneo",
-                     font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 4))
+        ctk.CTkLabel(left, text="Progreso del escaneo", font=ctk.CTkFont(size=12, weight="bold")).grid(
+            row=0, column=0, sticky="w", padx=12, pady=(10, 4)
+        )
         self.txt_log = ctk.CTkTextbox(left, font=ctk.CTkFont(family="monospace", size=10), wrap="word")
         self.txt_log.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 6))
         self.txt_log.configure(state="disabled")
@@ -112,8 +138,9 @@ class App(ctk.CTk):
         right.grid(row=0, column=1, sticky="nsew")
         right.rowconfigure(1, weight=1)
         right.columnconfigure(0, weight=1)
-        ctk.CTkLabel(right, text="Resultados del análisis",
-                     font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 4))
+        ctk.CTkLabel(right, text="Resultados del análisis", font=ctk.CTkFont(size=12, weight="bold")).grid(
+            row=0, column=0, sticky="w", padx=12, pady=(10, 4)
+        )
         self.tabs = ctk.CTkTabview(right, anchor="nw")
         self.tabs.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
         self._t = ("🔴  Problemas", "✅  Buenas prácticas", "🔵  Informativo", "📄  Reporte completo")
@@ -125,31 +152,47 @@ class App(ctk.CTk):
         self.sc_ok.pack(fill="both", expand=True)
         self.sc_info = ctk.CTkScrollableFrame(self.tabs.tab(self._t[2]))
         self.sc_info.pack(fill="both", expand=True)
-        self.txt_reporte = ctk.CTkTextbox(self.tabs.tab(self._t[3]),
-                                          font=ctk.CTkFont(family="monospace", size=10), wrap="word")
+        self.txt_reporte = ctk.CTkTextbox(
+            self.tabs.tab(self._t[3]), font=ctk.CTkFont(family="monospace", size=10), wrap="word"
+        )
         self.txt_reporte.pack(fill="both", expand=True)
         self.txt_reporte.configure(state="disabled")
 
-        ctk.CTkLabel(self, text="⚠  Uso académico y ético. Solo analice sitios propios o con autorización expresa.",
-                     font=ctk.CTkFont(size=10), text_color="#475569").pack(pady=(0, 6))
+        ctk.CTkLabel(
+            self,
+            text="⚠  Uso académico y ético. Solo analice sitios propios o con autorización expresa.",
+            font=ctk.CTkFont(size=10),
+            text_color="#475569",
+        ).pack(pady=(0, 6))
 
     def _build_cards(self):
         for w in self.resumen_frame.winfo_children():
             w.destroy()
-        ctk.CTkLabel(self.resumen_frame, text="Resumen",
-                     font=ctk.CTkFont(size=11, weight="bold")).grid(row=0, column=0, columnspan=5, sticky="w", padx=10, pady=(6, 2))
+        ctk.CTkLabel(self.resumen_frame, text="Resumen", font=ctk.CTkFont(size=11, weight="bold")).grid(
+            row=0, column=0, columnspan=5, sticky="w", padx=10, pady=(6, 2)
+        )
         self._cards: dict[str, ctk.StringVar] = {}
-        for col, (nivel, emoji, txt) in enumerate([
-            ("alto", "🔴", "Alto"), ("medio", "🟡", "Medio"), ("bajo", "🟢", "Bajo"),
-            ("info", "🔵", "Info"), ("ok", "✅", "OK")]):
+        for col, (nivel, emoji, txt) in enumerate(
+            [
+                ("alto", "🔴", "Alto"),
+                ("medio", "🟡", "Medio"),
+                ("bajo", "🟢", "Bajo"),
+                ("info", "🔵", "Info"),
+                ("ok", "✅", "OK"),
+            ]
+        ):
             self.resumen_frame.columnconfigure(col, weight=1)
             card = ctk.CTkFrame(self.resumen_frame, border_color=COLORES_NIVEL[nivel], border_width=2)
             card.grid(row=1, column=col, padx=4, pady=(2, 8), sticky="ew")
             ctk.CTkLabel(card, text=emoji, font=ctk.CTkFont(size=18)).pack(pady=(6, 0))
             var = ctk.StringVar(value="—")
             self._cards[nivel] = var
-            ctk.CTkLabel(card, textvariable=var, font=ctk.CTkFont(size=20, weight="bold"),
-                         text_color=COLORES_NIVEL[nivel]).pack()
+            ctk.CTkLabel(
+                card,
+                textvariable=var,
+                font=ctk.CTkFont(size=20, weight="bold"),
+                text_color=COLORES_NIVEL[nivel],
+            ).pack()
             ctk.CTkLabel(card, text=txt, font=ctk.CTkFont(size=10), text_color="gray").pack(pady=(0, 6))
 
     # ── Escaneo ───────────────────────────────────────────────
@@ -242,15 +285,40 @@ class App(ctk.CTk):
         card.pack(fill="x", padx=6, pady=(0, 6))
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.pack(fill="x", padx=10, pady=(8, 2))
-        ctk.CTkLabel(top, text=f"{EMOJIS_NIVEL.get(nivel, '')}  [{h.modulo}]",
-                     font=ctk.CTkFont(size=10), text_color=color, anchor="w").pack(side="left")
-        ctk.CTkLabel(card, text=h.hallazgo, font=ctk.CTkFont(size=12, weight="bold"),
-                     wraplength=560, justify="left", anchor="w").pack(fill="x", padx=14, pady=(0, 2))
-        ctk.CTkLabel(card, text=h.descripcion, font=ctk.CTkFont(size=11), text_color="#94a3b8",
-                     wraplength=560, justify="left", anchor="w").pack(fill="x", padx=14, pady=(0, 8))
+        ctk.CTkLabel(
+            top,
+            text=f"{EMOJIS_NIVEL.get(nivel, '')}  [{h.modulo}]",
+            font=ctk.CTkFont(size=10),
+            text_color=color,
+            anchor="w",
+        ).pack(side="left")
+        ctk.CTkLabel(
+            card,
+            text=h.hallazgo,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            wraplength=560,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", padx=14, pady=(0, 2))
+        ctk.CTkLabel(
+            card,
+            text=h.descripcion,
+            font=ctk.CTkFont(size=11),
+            text_color="#94a3b8",
+            wraplength=560,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", padx=14, pady=(0, 8))
         if h.referencia:
-            ctk.CTkLabel(card, text=f"🔗 {h.referencia}", font=ctk.CTkFont(size=10),
-                         text_color="#60a5fa", wraplength=560, justify="left", anchor="w").pack(fill="x", padx=14, pady=(0, 8))
+            ctk.CTkLabel(
+                card,
+                text=f"🔗 {h.referencia}",
+                font=ctk.CTkFont(size=10),
+                text_color="#60a5fa",
+                wraplength=560,
+                justify="left",
+                anchor="w",
+            ).pack(fill="x", padx=14, pady=(0, 8))
 
     def _poblar(self):
         por = self._result.por_riesgo()
@@ -261,27 +329,40 @@ class App(ctk.CTk):
             if not items:
                 continue
             encontro = True
-            titulo = {Risk.ALTO: "🔴  Riesgo alto", Risk.MEDIO: "🟡  Riesgo moderado",
-                      Risk.BAJO: "🟢  Bajo impacto"}[nivel]
-            ctk.CTkLabel(self.sc_problemas, text=titulo, font=ctk.CTkFont(size=12, weight="bold"),
-                         text_color=COLORES_NIVEL[nivel.value], anchor="w").pack(fill="x", padx=8, pady=(12, 4))
+            titulo = {
+                Risk.ALTO: "🔴  Riesgo alto",
+                Risk.MEDIO: "🟡  Riesgo moderado",
+                Risk.BAJO: "🟢  Bajo impacto",
+            }[nivel]
+            ctk.CTkLabel(
+                self.sc_problemas,
+                text=titulo,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=COLORES_NIVEL[nivel.value],
+                anchor="w",
+            ).pack(fill="x", padx=8, pady=(12, 4))
             for h in items:
                 self._tarjeta(self.sc_problemas, h)
         if not encontro:
-            ctk.CTkLabel(self.sc_problemas, text="✅  No se detectaron problemas.",
-                         font=ctk.CTkFont(size=14)).pack(pady=40)
+            ctk.CTkLabel(
+                self.sc_problemas, text="✅  No se detectaron problemas.", font=ctk.CTkFont(size=14)
+            ).pack(pady=40)
         # OK
         if por[Risk.OK]:
             for h in por[Risk.OK]:
                 self._tarjeta(self.sc_ok, h)
         else:
-            ctk.CTkLabel(self.sc_ok, text="Sin controles confirmados.", font=ctk.CTkFont(size=13)).pack(pady=40)
+            ctk.CTkLabel(self.sc_ok, text="Sin controles confirmados.", font=ctk.CTkFont(size=13)).pack(
+                pady=40
+            )
         # Info
         if por[Risk.INFO]:
             for h in por[Risk.INFO]:
                 self._tarjeta(self.sc_info, h)
         else:
-            ctk.CTkLabel(self.sc_info, text="Sin hallazgos informativos.", font=ctk.CTkFont(size=13)).pack(pady=40)
+            ctk.CTkLabel(self.sc_info, text="Sin hallazgos informativos.", font=ctk.CTkFont(size=13)).pack(
+                pady=40
+            )
 
     def _abrir_carpeta(self):
         carpeta = os.path.dirname(os.path.abspath(self._rutas[0])) if self._rutas else os.getcwd()

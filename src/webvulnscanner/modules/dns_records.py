@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import logging
 
-import dns.resolver
-import dns.query
-import dns.zone
 import dns.exception
+import dns.query
+import dns.resolver
+import dns.zone
 
 from webvulnscanner.models import Finding, Risk
 
@@ -23,8 +23,13 @@ def _consultar(dominio: str, tipo: str) -> list[str]:
     try:
         resp = dns.resolver.resolve(dominio, tipo, lifetime=6)
         return [r.to_text() for r in resp]
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers,
-            dns.exception.Timeout, dns.exception.DNSException):
+    except (
+        dns.resolver.NoAnswer,
+        dns.resolver.NXDOMAIN,
+        dns.resolver.NoNameservers,
+        dns.exception.Timeout,
+        dns.exception.DNSException,
+    ):
         return []
 
 
@@ -40,9 +45,15 @@ def analizar(dominio: str) -> list[Finding]:
     mx = _consultar(dominio, "MX")
     if mx:
         log.info("  [+] MX: %s", ", ".join(mx))
-        findings.append(Finding("DNS", f"{len(mx)} registro(s) MX", Risk.INFO,
-                                "El dominio recibe correo. Se evalúa SPF/DMARC abajo.",
-                                evidencia="; ".join(mx)))
+        findings.append(
+            Finding(
+                "DNS",
+                f"{len(mx)} registro(s) MX",
+                Risk.INFO,
+                "El dominio recibe correo. Se evalúa SPF/DMARC abajo.",
+                evidencia="; ".join(mx),
+            )
+        )
 
     # SPF (en TXT)
     txt = _txt_plano(_consultar(dominio, "TXT"))
@@ -50,17 +61,44 @@ def analizar(dominio: str) -> list[Finding]:
     if spf:
         val = spf[0]
         if "-all" in val:
-            findings.append(Finding("DNS", "SPF con política estricta (-all)", Risk.OK,
-                                    "SPF rechaza remitentes no autorizados.", evidencia=val))
+            findings.append(
+                Finding(
+                    "DNS",
+                    "SPF con política estricta (-all)",
+                    Risk.OK,
+                    "SPF rechaza remitentes no autorizados.",
+                    evidencia=val,
+                )
+            )
         elif "~all" in val:
-            findings.append(Finding("DNS", "SPF en modo softfail (~all)", Risk.BAJO,
-                                    "SPF marca pero no rechaza. Considere endurecer a '-all'.", evidencia=val))
+            findings.append(
+                Finding(
+                    "DNS",
+                    "SPF en modo softfail (~all)",
+                    Risk.BAJO,
+                    "SPF marca pero no rechaza. Considere endurecer a '-all'.",
+                    evidencia=val,
+                )
+            )
         else:
-            findings.append(Finding("DNS", "SPF sin política de rechazo (?all/+all)", Risk.MEDIO,
-                                    "SPF no protege contra spoofing de forma efectiva.", evidencia=val))
+            findings.append(
+                Finding(
+                    "DNS",
+                    "SPF sin política de rechazo (?all/+all)",
+                    Risk.MEDIO,
+                    "SPF no protege contra spoofing de forma efectiva.",
+                    evidencia=val,
+                )
+            )
     elif mx:
-        findings.append(Finding("DNS", "Sin registro SPF", Risk.MEDIO,
-                                "El dominio recibe correo pero no publica SPF: facilita el spoofing."))
+        findings.append(
+            Finding(
+                "DNS",
+                "Sin registro SPF",
+                Risk.MEDIO,
+                "El dominio recibe correo pero no publica SPF: facilita el spoofing.",
+            )
+        )
 
     # DMARC
     dmarc = _txt_plano(_consultar(f"_dmarc.{dominio}", "TXT"))
@@ -73,21 +111,46 @@ def analizar(dominio: str) -> list[Finding]:
             nivel, desc = Risk.BAJO, "DMARC en 'quarantine'. Considere 'reject' cuando esté maduro."
         else:
             nivel, desc = Risk.MEDIO, "DMARC en 'none': solo monitorea, no protege."
-        findings.append(Finding("DNS", f"DMARC presente ({val.split('p=')[-1].split(';')[0]})",
-                                nivel, desc, evidencia=dmarc[0]))
+        findings.append(
+            Finding(
+                "DNS",
+                f"DMARC presente ({val.split('p=')[-1].split(';')[0]})",
+                nivel,
+                desc,
+                evidencia=dmarc[0],
+            )
+        )
     elif mx:
-        findings.append(Finding("DNS", "Sin registro DMARC", Risk.MEDIO,
-                                "Sin DMARC no hay política contra suplantación del dominio en correo."))
+        findings.append(
+            Finding(
+                "DNS",
+                "Sin registro DMARC",
+                Risk.MEDIO,
+                "Sin DMARC no hay política contra suplantación del dominio en correo.",
+            )
+        )
 
     # CAA
     caa = _consultar(dominio, "CAA")
     if caa:
-        findings.append(Finding("DNS", f"CAA presente ({len(caa)} registro/s)", Risk.OK,
-                                "Restringe qué CAs pueden emitir certificados para el dominio.",
-                                evidencia="; ".join(caa)))
+        findings.append(
+            Finding(
+                "DNS",
+                f"CAA presente ({len(caa)} registro/s)",
+                Risk.OK,
+                "Restringe qué CAs pueden emitir certificados para el dominio.",
+                evidencia="; ".join(caa),
+            )
+        )
     else:
-        findings.append(Finding("DNS", "Sin registro CAA", Risk.BAJO,
-                                "Sin CAA, cualquier CA puede emitir certificados para el dominio."))
+        findings.append(
+            Finding(
+                "DNS",
+                "Sin registro CAA",
+                Risk.BAJO,
+                "Sin CAA, cualquier CA puede emitir certificados para el dominio.",
+            )
+        )
 
     # AXFR contra cada NS
     ns = [n.rstrip(".") for n in _consultar(dominio, "NS")]
@@ -96,11 +159,16 @@ def analizar(dominio: str) -> list[Finding]:
             zona = dns.zone.from_xfr(dns.query.xfr(servidor, dominio, lifetime=6))
             nombres = len(list(zona.nodes.keys()))
             log.info("  [!!] AXFR permitido en %s (%d registros)", servidor, nombres)
-            findings.append(Finding("DNS", f"Transferencia de zona (AXFR) permitida en {servidor}",
-                                    Risk.ALTO,
-                                    f"El NS expone la zona completa ({nombres} registros): fuga grave de "
-                                    "infraestructura interna. Restrinja AXFR a secundarios autorizados.",
-                                    evidencia=servidor))
+            findings.append(
+                Finding(
+                    "DNS",
+                    f"Transferencia de zona (AXFR) permitida en {servidor}",
+                    Risk.ALTO,
+                    f"El NS expone la zona completa ({nombres} registros): fuga grave de "
+                    "infraestructura interna. Restrinja AXFR a secundarios autorizados.",
+                    evidencia=servidor,
+                )
+            )
         except Exception:  # noqa: BLE001 — lo normal es que falle (bien configurado)
             continue
 

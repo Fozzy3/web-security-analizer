@@ -13,6 +13,7 @@ import socket
 import ssl
 import urllib.error
 import urllib.request
+from typing import Any
 
 from webvulnscanner.models import Finding, Risk
 from webvulnscanner.net import TIMEOUT, USER_AGENT
@@ -41,9 +42,11 @@ def _probar_version(dominio: str, version: ssl.TLSVersion) -> str | None:
     except (ValueError, OSError):
         return ""  # OpenSSL local ya no ofrece esta versión
     try:
-        with socket.create_connection((dominio, 443), timeout=TIMEOUT) as sock:
-            with ctx.wrap_socket(sock, server_hostname=dominio) as ss:
-                return ss.version() or "desconocida"
+        with (
+            socket.create_connection((dominio, 443), timeout=TIMEOUT) as sock,
+            ctx.wrap_socket(sock, server_hostname=dominio) as ss,
+        ):
+            return ss.version() or "desconocida"
     except (ssl.SSLError, OSError):
         return None
 
@@ -58,9 +61,12 @@ def _cipher_debil(dominio: str) -> str | None:
     except ssl.SSLError:
         return None  # el cliente no tiene ciphers débiles compilados
     try:
-        with socket.create_connection((dominio, 443), timeout=TIMEOUT) as sock:
-            with ctx.wrap_socket(sock, server_hostname=dominio) as ss:
-                return ss.cipher()[0]
+        with (
+            socket.create_connection((dominio, 443), timeout=TIMEOUT) as sock,
+            ctx.wrap_socket(sock, server_hostname=dominio) as ss,
+        ):
+            info = ss.cipher()
+            return info[0] if info else None
     except (ssl.SSLError, OSError):
         return None
 
@@ -69,29 +75,40 @@ def _analizar_certificado(dominio: str) -> list[Finding]:
     findings: list[Finding] = []
     ctx = ssl.create_default_context()
     try:
-        with socket.create_connection((dominio, 443), timeout=TIMEOUT) as sock:
-            with ctx.wrap_socket(sock, server_hostname=dominio) as ss:
-                cert = ss.getpeercert()
+        with (
+            socket.create_connection((dominio, 443), timeout=TIMEOUT) as sock,
+            ctx.wrap_socket(sock, server_hostname=dominio) as ss,
+        ):
+            cert: dict[str, Any] = ss.getpeercert() or {}
     except ssl.SSLCertVerificationError as e:
         log.info("  [!] Verificación de certificado falló: %s", e.verify_message)
-        return [Finding(
-            "TLS/HTTPS", f"Certificado no confiable: {e.verify_message}", Risk.ALTO,
-            "El certificado no valida (expirado, autofirmado, o dominio distinto). "
-            "Los navegadores mostrarán advertencia.",
-            evidencia=str(e.verify_message),
-        )]
+        return [
+            Finding(
+                "TLS/HTTPS",
+                f"Certificado no confiable: {e.verify_message}",
+                Risk.ALTO,
+                "El certificado no valida (expirado, autofirmado, o dominio distinto). "
+                "Los navegadores mostrarán advertencia.",
+                evidencia=str(e.verify_message),
+            )
+        ]
     except (OSError, ssl.SSLError) as e:
         log.info("  [-] HTTPS no disponible: %s", e)
-        return [Finding(
-            "TLS/HTTPS", "HTTPS no disponible (443 cerrado o sin TLS)", Risk.ALTO,
-            "Sin HTTPS, todo el tráfico viaja en claro y es vulnerable a MITM.",
-        )]
+        return [
+            Finding(
+                "TLS/HTTPS",
+                "HTTPS no disponible (443 cerrado o sin TLS)",
+                Risk.ALTO,
+                "Sin HTTPS, todo el tráfico viaja en claro y es vulnerable a MITM.",
+            )
+        ]
 
     # Expiración
     not_after = cert.get("notAfter", "")
     if not_after:
         exp = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z").replace(
-            tzinfo=datetime.timezone.utc)
+            tzinfo=datetime.timezone.utc
+        )
         dias = (exp - datetime.datetime.now(datetime.timezone.utc)).days
         if dias < 0:
             nivel, desc = Risk.ALTO, "El certificado EXPIRÓ."
@@ -102,9 +119,15 @@ def _analizar_certificado(dominio: str) -> list[Finding]:
         else:
             nivel, desc = Risk.OK, f"Válido por {dias} días más."
         log.info("  [+] Certificado válido hasta %s (%d días)", exp.date(), dias)
-        findings.append(Finding(
-            "TLS/HTTPS", f"Certificado expira {exp.date()} ({dias} días)", nivel, desc,
-            evidencia=not_after))
+        findings.append(
+            Finding(
+                "TLS/HTTPS",
+                f"Certificado expira {exp.date()} ({dias} días)",
+                nivel,
+                desc,
+                evidencia=not_after,
+            )
+        )
 
     # Sujeto / emisor / SAN
     subject = dict(x[0] for x in cert.get("subject", []))
@@ -113,10 +136,15 @@ def _analizar_certificado(dominio: str) -> list[Finding]:
     ca = issuer.get("organizationName", issuer.get("commonName", "—"))
     sans = [v for k, v in cert.get("subjectAltName", []) if k == "DNS"]
     log.info("  [+] CN=%s | CA=%s | SAN=%d nombres", cn, ca, len(sans))
-    findings.append(Finding(
-        "TLS/HTTPS", f"Certificado: CN={cn}, emisor={ca}", Risk.INFO,
-        f"Emitido para '{cn}' por '{ca}'. Cubre {len(sans)} nombre(s) SAN.",
-        evidencia=", ".join(sans[:10]) or cn))
+    findings.append(
+        Finding(
+            "TLS/HTTPS",
+            f"Certificado: CN={cn}, emisor={ca}",
+            Risk.INFO,
+            f"Emitido para '{cn}' por '{ca}'. Cubre {len(sans)} nombre(s) SAN.",
+            evidencia=", ".join(sans[:10]) or cn,
+        )
+    )
     return findings
 
 
@@ -131,14 +159,20 @@ def _redireccion_https(dominio: str) -> Finding | None:
         opener.open(req, timeout=TIMEOUT)
         log.info("  [!] HTTP no redirige a HTTPS")
         return Finding(
-            "TLS/HTTPS", "HTTP no redirige a HTTPS", Risk.MEDIO,
-            "Responde por HTTP sin forzar HTTPS: usuarios expuestos a sniffing/MITM.")
+            "TLS/HTTPS",
+            "HTTP no redirige a HTTPS",
+            Risk.MEDIO,
+            "Responde por HTTP sin forzar HTTPS: usuarios expuestos a sniffing/MITM.",
+        )
     except urllib.error.HTTPError as e:
         if e.code in (301, 302, 307, 308) and (e.headers.get("Location", "").startswith("https://")):
             log.info("  [+] HTTP redirige a HTTPS")
             return Finding(
-                "TLS/HTTPS", f"HTTP redirige a HTTPS ({e.code})", Risk.OK,
-                "Redirige correctamente el tráfico HTTP a HTTPS.")
+                "TLS/HTTPS",
+                f"HTTP redirige a HTTPS ({e.code})",
+                Risk.OK,
+                "Redirige correctamente el tráfico HTTP a HTTPS.",
+            )
     except Exception:  # noqa: BLE001
         pass
     return None
@@ -157,32 +191,48 @@ def analizar(dominio: str) -> list[Finding]:
             soportadas.append(nombre)
             if nivel != Risk.OK:
                 log.info("  [!] Protocolo débil aceptado: %s", nombre)
-                findings.append(Finding(
-                    "TLS/HTTPS", f"Protocolo obsoleto aceptado: {nombre}", nivel, desc,
-                    evidencia=nombre))
+                findings.append(
+                    Finding(
+                        "TLS/HTTPS", f"Protocolo obsoleto aceptado: {nombre}", nivel, desc, evidencia=nombre
+                    )
+                )
     if soportadas:
         log.info("  [+] Versiones TLS soportadas: %s", ", ".join(soportadas))
         moderno = any(v in soportadas for v in ("TLSv1.2", "TLSv1.3"))
-        findings.append(Finding(
-            "TLS/HTTPS", f"Versiones TLS soportadas: {', '.join(soportadas)}",
-            Risk.OK if moderno else Risk.ALTO,
-            "Soporta TLS moderno." if moderno else "No soporta TLS 1.2/1.3: inseguro.",
-            evidencia=", ".join(soportadas)))
+        findings.append(
+            Finding(
+                "TLS/HTTPS",
+                f"Versiones TLS soportadas: {', '.join(soportadas)}",
+                Risk.OK if moderno else Risk.ALTO,
+                "Soporta TLS moderno." if moderno else "No soporta TLS 1.2/1.3: inseguro.",
+                evidencia=", ".join(soportadas),
+            )
+        )
     else:
-        findings.append(Finding(
-            "TLS/HTTPS", "No se pudo negociar ninguna versión TLS en el puerto 443",
-            Risk.ALTO, "El servidor no ofrece HTTPS o el puerto 443 está cerrado."))
+        findings.append(
+            Finding(
+                "TLS/HTTPS",
+                "No se pudo negociar ninguna versión TLS en el puerto 443",
+                Risk.ALTO,
+                "El servidor no ofrece HTTPS o el puerto 443 está cerrado.",
+            )
+        )
         return findings  # sin TLS no tiene sentido seguir
 
     # 2. Ciphers débiles
     debil = _cipher_debil(dominio)
     if debil:
         log.info("  [!] Cipher débil aceptado: %s", debil)
-        findings.append(Finding(
-            "TLS/HTTPS", f"Cipher débil aceptado: {debil}", Risk.ALTO,
-            "El servidor acepta cifrado débil (RC4/3DES/EXPORT/NULL), vulnerable a "
-            "ataques de descifrado. Configure solo suites fuertes (AEAD).",
-            evidencia=debil))
+        findings.append(
+            Finding(
+                "TLS/HTTPS",
+                f"Cipher débil aceptado: {debil}",
+                Risk.ALTO,
+                "El servidor acepta cifrado débil (RC4/3DES/EXPORT/NULL), vulnerable a "
+                "ataques de descifrado. Configure solo suites fuertes (AEAD).",
+                evidencia=debil,
+            )
+        )
 
     # 3. Certificado
     findings.extend(_analizar_certificado(dominio))

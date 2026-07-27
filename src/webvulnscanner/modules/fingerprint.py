@@ -23,7 +23,11 @@ _FIRMAS = {
     "Drupal": [("body", "sites/all/"), ("header:x-generator", "drupal"), ("header:x-drupal-cache", "")],
     "Joomla": [("body", "/media/jui/"), ("body", "com_content")],
     "PHP": [("header:x-powered-by", "php"), ("cookie", "phpsessid")],
-    "ASP.NET": [("header:x-powered-by", "asp.net"), ("header:x-aspnet-version", ""), ("cookie", "asp.net_sessionid")],
+    "ASP.NET": [
+        ("header:x-powered-by", "asp.net"),
+        ("header:x-aspnet-version", ""),
+        ("cookie", "asp.net_sessionid"),
+    ],
     "Laravel": [("cookie", "laravel_session")],
     "Django": [("cookie", "csrftoken"), ("cookie", "django")],
     "Express/Node": [("header:x-powered-by", "express")],
@@ -36,7 +40,7 @@ def detectar(respuesta: HttpResponse) -> dict[str, str]:
     """Devuelve {tecnología: evidencia}. Incluye versión si aparece en meta generator."""
     encontrados: dict[str, str] = {}
     body = respuesta.body.lower()
-    cookies = respuesta.header("set-cookie", "").lower()
+    cookies = (respuesta.header("set-cookie") or "").lower()
 
     for tech, firmas in _FIRMAS.items():
         for fuente, patron in firmas:
@@ -65,14 +69,29 @@ def analizar(respuesta: HttpResponse | None) -> list[Finding]:
         return []
     techs = detectar(respuesta)
     if not techs:
-        return [Finding("Fingerprint", "No se identificaron tecnologías por firmas", Risk.INFO,
-                        "No se detectaron CMS/frameworks conocidos en headers, cookies ni HTML.")]
+        return [
+            Finding(
+                "Fingerprint",
+                "No se identificaron tecnologías por firmas",
+                Risk.INFO,
+                "No se detectaron CMS/frameworks conocidos en headers, cookies ni HTML.",
+            )
+        ]
     log.info("  [+] Tecnologías: %s", ", ".join(techs))
     # Un generator con número de versión es más sensible.
     tiene_version = any(re.search(r"\d+\.\d+", t) for t in techs)
     nivel = Risk.MEDIO if tiene_version else Risk.BAJO
-    return [Finding("Fingerprint", f"Tecnologías detectadas: {', '.join(techs)}", nivel,
-                    "Conocer el stack facilita buscar exploits específicos. "
-                    + ("Se detectó número de versión: revise CVEs para esa versión."
-                       if tiene_version else "Evite exponer versiones concretas."),
-                    evidencia=", ".join(f"{k}={v}" for k, v in techs.items()))]
+    return [
+        Finding(
+            "Fingerprint",
+            f"Tecnologías detectadas: {', '.join(techs)}",
+            nivel,
+            "Conocer el stack facilita buscar exploits específicos. "
+            + (
+                "Se detectó número de versión: revise CVEs para esa versión."
+                if tiene_version
+                else "Evite exponer versiones concretas."
+            ),
+            evidencia=", ".join(f"{k}={v}" for k, v in techs.items()),
+        )
+    ]

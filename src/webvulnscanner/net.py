@@ -6,6 +6,7 @@ inyección de payloads ni fuzzing.
 
 from __future__ import annotations
 
+import contextlib
 import socket
 import ssl
 import urllib.error
@@ -45,7 +46,6 @@ def fetch(dominio: str, ruta: str = "/", *, max_body: int = 200_000) -> HttpResp
 
     No sigue el body más allá de `max_body` para no cargar páginas enormes.
     """
-    ultimo_error: Exception | None = None
     for esquema in ("https", "http"):
         url = f"{esquema}://{dominio}{ruta}"
         try:
@@ -59,13 +59,10 @@ def fetch(dominio: str, ruta: str = "/", *, max_body: int = 200_000) -> HttpResp
             # Un 4xx/5xx sigue siendo una respuesta válida para analizar headers.
             headers = {k.lower(): v for k, v in e.headers.items()} if e.headers else {}
             body = ""
-            try:
+            with contextlib.suppress(Exception):
                 body = e.read(max_body).decode("utf-8", errors="replace")
-            except Exception:
-                pass
             return HttpResponse(url, esquema, e.code, headers, body)
-        except Exception as e:  # noqa: BLE001 — pasar al siguiente esquema
-            ultimo_error = e
+        except Exception:  # noqa: BLE001 — pasar al siguiente esquema
             continue
     return None
 

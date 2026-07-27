@@ -8,12 +8,23 @@ propios handlers), no secuestrando sys.stdout.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 
 from webvulnscanner.models import Finding, Risk, ScanResult
-from webvulnscanner.net import fetch
 from webvulnscanner.modules import (
-    cve, dns_records, disclosure, fingerprint, headers, ports, recon, subdomains, tls, waf,
+    cve,
+    disclosure,
+    dns_records,
+    fingerprint,
+    headers,
+    ports,
+    recon,
+    subdomains,
+    tls,
+    waf,
 )
+from webvulnscanner.net import fetch
 
 log = logging.getLogger("webvulnscanner")
 
@@ -38,12 +49,22 @@ def _ejecutar(nombre: str, fn) -> list[Finding]:
         return fn()
     except Exception as e:  # noqa: BLE001
         log.warning("  [x] Módulo '%s' falló: %s", nombre, e)
-        return [Finding(nombre, f"El módulo '{nombre}' falló durante la ejecución", Risk.INFO,
-                        f"Error interno: {e}")]
+        return [
+            Finding(
+                nombre, f"El módulo '{nombre}' falló durante la ejecución", Risk.INFO, f"Error interno: {e}"
+            )
+        ]
 
 
-def run_scan(dominio: str, *, activos: set[str] | None = None) -> ScanResult:
-    """Ejecuta el escaneo completo (o el subconjunto en `activos`)."""
+def run_scan(
+    dominio: str, *, activos: set[str] | None = None, paralelo: bool = True, max_workers: int = 8
+) -> ScanResult:
+    """Ejecuta el escaneo completo (o el subconjunto en `activos`).
+
+    recon corre primero (define ip/producto que otros módulos necesitan); el
+    resto corre en paralelo salvo que `paralelo=False`. Los findings se
+    ensamblan en el orden de MODULOS para que el reporte sea determinista.
+    """
     activos = activos or {n for n, _ in MODULOS}
     dominio = dominio.strip().replace("https://", "").replace("http://", "").rstrip("/")
 
@@ -61,23 +82,33 @@ def run_scan(dominio: str, *, activos: set[str] | None = None) -> ScanResult:
         log.info("  Análisis detenido: el dominio no resuelve.")
         return result
 
-    plan = [
-        ("ports", lambda: ports.analizar(info["ip"]), info["ip"] and "ports" in activos),
-        ("tls", lambda: tls.analizar(dominio), "tls" in activos),
-        ("headers", lambda: headers.analizar(respuesta), "headers" in activos),
-        ("dns", lambda: dns_records.analizar(dominio), "dns" in activos),
-        ("subdomains", lambda: subdomains.analizar(dominio), "subdomains" in activos),
-        ("disclosure", lambda: disclosure.analizar(dominio), "disclosure" in activos),
-        ("waf", lambda: waf.analizar(respuesta), "waf" in activos),
-        ("fingerprint", lambda: fingerprint.analizar(respuesta), "fingerprint" in activos),
-        ("cve", lambda: cve.analizar(info.get("producto"), info.get("version")), "cve" in activos),
-    ]
+    # (nombre -> función del módulo). Solo los que estén activos.
+    trabajos: dict[str, Callable[[], list[Finding]]] = {
+        "ports": lambda: ports.analizar(info["ip"]),
+        "tls": lambda: tls.analizar(dominio),
+        "headers": lambda: headers.analizar(respuesta),
+        "dns": lambda: dns_records.analizar(dominio),
+        "subdomains": lambda: subdomains.analizar(dominio),
+        "disclosure": lambda: disclosure.analizar(dominio),
+        "waf": lambda: waf.analizar(respuesta),
+        "fingerprint": lambda: fingerprint.analizar(respuesta),
+        "cve": lambda: cve.analizar(info.get("producto"), info.get("version")),
+    }
+    pendientes = {n: fn for n, fn in trabajos.items() if n in activos}
+
+    if paralelo:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            salidas = ex.map(lambda nf: _ejecutar(*nf), pendientes.items())
+            resultados = dict(zip(pendientes, salidas, strict=True))
+    else:
+        resultados = {n: _ejecutar(n, fn) for n, fn in pendientes.items()}
+
+    # Ensamblar en el orden canónico de MODULOS.
     etiquetas = dict(MODULOS)
-    for nombre, fn, habilitado in plan:
-        if not habilitado:
-            continue
-        log.info("\n[MÓDULO] %s\n%s", etiquetas.get(nombre, nombre), "─" * 48)
-        result.findings.extend(_ejecutar(nombre, fn))
+    for nombre, _label in MODULOS:
+        if nombre in resultados:
+            log.info("\n[MÓDULO] %s\n%s", etiquetas.get(nombre, nombre), "─" * 48)
+            result.findings.extend(resultados[nombre])
 
     return result
 
