@@ -11,6 +11,9 @@ venv/
 # Reportes generados por la herramienta
 reporte_*.txt
 reporte_*.json
+reporte_*.html
+reporte_*.sarif
+reportes/
 
 # Editor
 .vscode/

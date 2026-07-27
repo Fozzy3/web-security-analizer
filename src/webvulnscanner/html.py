@@ -48,7 +48,9 @@ def _tarjeta(f: Finding) -> str:
     </div>"""
 
 
-def render(result: ScanResult, *, timestamp: str | None = None) -> str:
+def render(result: ScanResult, *, timestamp: str | None = None, fragment_only: bool = False) -> str:
+    """Renderiza el reporte. `fragment_only=True` omite <!doctype>/<html>/<head>/<body>
+    (para incrustar en un artifact que ya aporta ese esqueleto)."""
     ts = timestamp or datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conteo = result.conteo()
     por = result.por_riesgo()
@@ -68,16 +70,13 @@ def render(result: ScanResult, *, timestamp: str | None = None) -> str:
         for n in (Risk.ALTO, Risk.MEDIO, Risk.BAJO, Risk.INFO, Risk.OK)
     )
 
-    return f"""<!doctype html>
-<html lang="es"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reporte de seguridad — {escape(result.dominio)}</title>
-<style>
+    problemas = sum(conteo[n] for n in (Risk.ALTO, Risk.MEDIO, Risk.BAJO, Risk.INFO))
+    estilos = f"""<style>
   :root {{ color-scheme: light dark; }}
   * {{ box-sizing: border-box; }}
   body {{ font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }}
   .wrap {{ max-width: 960px; margin: 0 auto; padding: 24px; }}
-  header {{ display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  .rhead {{ display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
            border-bottom: 1px solid #334155; padding-bottom: 20px; margin-bottom: 20px; }}
   .nota {{ font-size: 56px; font-weight: 800; width: 96px; height: 96px; border-radius: 16px;
           display: flex; align-items: center; justify-content: center; color: #fff;
@@ -102,9 +101,9 @@ def render(result: ScanResult, *, timestamp: str | None = None) -> str:
   footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #334155;
            color: #64748b; font-size: 12px; }}
   @media (max-width: 640px) {{ .resumen {{ grid-template-columns: repeat(3, 1fr); }} }}
-</style></head>
-<body><div class="wrap">
-  <header>
+</style>"""
+    cuerpo = f"""<div class="wrap">
+  <div class="rhead">
     <div class="nota">{ltr}</div>
     <div>
       <h1>🔍 Reporte de seguridad web</h1>
@@ -114,10 +113,20 @@ def render(result: ScanResult, *, timestamp: str | None = None) -> str:
         <b>Nota:</b> {ltr} ({pts}/100) &nbsp;·&nbsp; <b>Fecha:</b> {escape(ts)}
       </div>
     </div>
-  </header>
+  </div>
   <div class="resumen">{cards_resumen}</div>
-  {f"<h2>⚠ Problemas e información ({sum(conteo[n] for n in (Risk.ALTO, Risk.MEDIO, Risk.BAJO, Risk.INFO))})</h2>{tarjetas_riesgo}" if tarjetas_riesgo else ""}
+  {f"<h2>⚠ Problemas e información ({problemas})</h2>{tarjetas_riesgo}" if tarjetas_riesgo else ""}
   {f"<h2>✅ Buenas prácticas confirmadas ({conteo[Risk.OK]})</h2>{tarjetas_ok}" if tarjetas_ok else ""}
-  <footer>Generado por WebVulnScanner 2.0 · Auditoría pasiva · Uso académico y ético.
+  <footer>Generado por WebVulnScanner 2.0 · Auditoría de seguridad · Uso académico y ético.
   Solo analice sitios propios o con autorización expresa.</footer>
-</div></body></html>"""
+</div>"""
+
+    fragmento = estilos + "\n" + cuerpo
+    if fragment_only:
+        return fragmento
+    return (
+        '<!doctype html>\n<html lang="es"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>Reporte de seguridad — {escape(result.dominio)}</title>"
+        f"{estilos}</head><body>{cuerpo}</body></html>"
+    )
