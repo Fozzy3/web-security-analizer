@@ -21,6 +21,7 @@ from webvulnscanner.modules import (
     headers,
     ports,
     recon,
+    shodan_intel,
     subdomains,
     tls,
     waf,
@@ -41,6 +42,7 @@ MODULOS = [
     ("waf", "Detección de WAF / CDN"),
     ("fingerprint", "Fingerprint de Tecnologías"),
     ("cve", "Correlación de CVEs (NVD)"),
+    ("shodan", "Inteligencia Shodan (opcional)"),
 ]
 
 # Módulos ACTIVOS (Fase D): solo con autorización explícita (autorizado=True).
@@ -110,6 +112,7 @@ def run_scan(
         "waf": lambda: waf.analizar(respuesta),
         "fingerprint": lambda: fingerprint.analizar(respuesta),
         "cve": lambda: cve.analizar(info.get("producto"), info.get("version")),
+        "shodan": lambda: shodan_intel.analizar(info.get("ip")),
     }
 
     orden = list(MODULOS)

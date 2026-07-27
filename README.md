@@ -1,58 +1,77 @@
-# WebVulnScanner 2.0 — Auditoría Pasiva de Seguridad Web
+# WebVulnScanner 2.0 — Auditoría de Seguridad Web
 
-**Materia:** Redes de Computadores
-**Autor:** fozzy3
-**Enfoque:** Ético, académico y **no intrusivo** (solo reconocimiento pasivo, sin inyección de payloads ni fuerza bruta).
+**Materia:** Redes de Computadores · **Autor:** fozzy3
+**Enfoque:** Ético y académico. Pasivo por defecto; el modo activo exige autorización explícita.
+
+Auditor de la superficie de seguridad *externa* de un dominio. Clasifica cada hallazgo por riesgo
+(🔴 Alto / 🟡 Medio / 🟢 Bajo / 🔵 Info / ✅ Buenas prácticas), calcula una **nota A–F** y exporta el
+reporte en **TXT, JSON, HTML y SARIF**.
 
 ---
 
-## ¿Qué hace?
+## Capacidades
 
-Audita la superficie de seguridad *externa* de un dominio en **10 módulos**, clasifica cada hallazgo por riesgo (🔴 Alto / 🟡 Medio / 🟢 Bajo / 🔵 Info / ✅ Buenas prácticas) y exporta un reporte en `.txt` y `.json`.
+### Módulos pasivos (por defecto — no envían payloads al objetivo)
 
-| # | Módulo | Qué analiza | Concepto de redes |
-|---|--------|-------------|-------------------|
-| 1 | **Reconocimiento** | DNS A/AAAA (IPv4+IPv6), cabeceras `Server`/`X-Powered-By`, producto+versión | DNS, HTTP |
-| 2 | **Puertos + banners** | TCP connect scan a 17 puertos + *banner grabbing* de versión | TCP, servicios |
-| 3 | **TLS/HTTPS** | Enumera **versiones** (detecta SSLv3/TLS 1.0/1.1), **ciphers débiles**, validez/CN/SAN del certificado, redirección HTTP→HTTPS | TLS, PKI |
-| 4 | **Headers HTTP** | Evalúa el **valor** de CSP (unsafe-inline, wildcards) y HSTS (max-age, includeSubDomains), no solo presencia | Seguridad web |
-| 5 | **DNS y correo** | MX, **SPF/DMARC** (antispoofing), **CAA**, y prueba de **transferencia de zona (AXFR)** | DNS, correo |
-| 6 | **Subdominios** | Enumeración pasiva vía **Certificate Transparency** (crt.sh) | PKI, CT logs |
-| 7 | **Exposición** | Detecta `.git/`, `.env`, backups, `robots.txt` con rutas sensibles, `security.txt` | HTTP |
-| 8 | **WAF/CDN** | Identifica Cloudflare, Akamai, Sucuri, Fastly… por firmas | Infraestructura |
-| 9 | **Fingerprint** | CMS/frameworks (WordPress, Drupal, Laravel…) por headers/cookies/HTML | App web |
-| 10 | **CVEs** | Correlaciona producto+versión con la API pública del **NVD** | Gestión de vulnerabilidades |
+| Módulo | Qué analiza |
+|--------|-------------|
+| **Reconocimiento** | DNS A/AAAA (IPv4+IPv6), cabeceras `Server`/`X-Powered-By`, producto+versión |
+| **Puertos + banners** | TCP connect scan a 17 puertos + *banner grabbing* de versión |
+| **TLS/HTTPS** | Enumera versiones (detecta SSLv3/TLS 1.0/1.1), **ciphers débiles**, validez/CN/SAN, **fuerza de clave** (RSA<2048, firma SHA-1), redirección HTTP→HTTPS |
+| **Headers HTTP** | Evalúa el **valor** de CSP (unsafe-inline, wildcards) y HSTS (max-age, includeSubDomains) |
+| **DNS y correo** | MX, **SPF/DMARC/DKIM/BIMI**, **CAA**, **DNSSEC** y prueba de **transferencia de zona (AXFR)** |
+| **Subdominios** | Enumeración vía **Certificate Transparency** (crt.sh) + detección de **subdomain takeover** (CNAME colgante) |
+| **Exposición** | `.git/`, `.env`, backups, `robots.txt`, `security.txt` |
+| **WAF/CDN** | Cloudflare, Akamai, Sucuri, Fastly, Vercel… |
+| **Fingerprint** | CMS/frameworks (WordPress, Drupal, Laravel, Django…) |
+| **CVEs (NVD)** | Correlación **por CPE** del producto+versión (elimina falsos positivos del keyword search) |
+| **Shodan** *(opcional)* | Inteligencia de la IP vía Shodan (requiere `SHODAN_API_KEY`) |
+
+### Módulos activos (`--authorized` — envían peticiones al objetivo)
+
+> ⚠️ **Solo en objetivos propios o con autorización expresa.** Sin el flag `--authorized` ni siquiera se cargan.
+
+| Módulo | Qué prueba |
+|--------|-----------|
+| **Cookies** | Flags `Secure`, `HttpOnly`, `SameSite` |
+| **CORS** | Reflexión de `Origin` arbitrario y `Allow-Credentials` |
+| **Inyección** | XSS reflejado (marcador) y SQLi error-based (comilla) |
+| **Fuzzing** | Rutas comunes por diccionario (concurrente) |
 
 ---
 
 ## Instalación
 
-Requiere **Python 3.10+**. Se instala como paquete:
+Requiere **Python 3.10+**.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate
+pip install -e .            # núcleo (CLI): dnspython + cryptography
+pip install -e ".[gui]"     # + interfaz gráfica (customtkinter)
+pip install -e ".[api]"     # + API REST (FastAPI + uvicorn)
+pip install -e ".[dev]"     # + pytest, ruff, mypy
 
-pip install -e .                   # núcleo (CLI) + dnspython
-pip install -e ".[gui]"            # + interfaz gráfica (customtkinter)
-pip install -e ".[dev]"            # + pytest para tests
+# o todo de una:
+make dev
 ```
 
 ---
 
 ## Uso
 
-### Línea de comandos
+### CLI
 
 ```bash
-webvulnscanner example.com                 # escaneo completo
+webvulnscanner example.com                 # escaneo pasivo completo → TXT/JSON/HTML
+webvulnscanner example.com --profile quick # perfil rápido (recon, tls, headers, waf, fingerprint)
 webvulnscanner example.com --only tls,dns  # solo ciertos módulos
-webvulnscanner example.com --skip cve      # todo menos CVEs
-webvulnscanner example.com -o reportes/    # carpeta de salida
-webvulnscanner example.com --no-save -q    # sin archivos, sin log de progreso
-webvulnscanner --version
+webvulnscanner example.com --sarif         # además exporta .sarif (CI/GitHub Security)
+webvulnscanner example.com --diff prev.json  # regresiones vs. un reporte anterior
+webvulnscanner miweb.com   --authorized    # habilita módulos ACTIVOS (con autorización)
+webvulnscanner example.com -o reportes/ -q # carpeta de salida, sin log de progreso
 ```
 
+Perfiles disponibles: `full` (def), `quick`, `tls`, `web`, `dns`.
 Devuelve **código de salida 2** si hay hallazgos de riesgo alto (útil para CI).
 
 ### Interfaz gráfica
@@ -61,7 +80,22 @@ Devuelve **código de salida 2** si hay hallazgos de riesgo alto (útil para CI)
 python gui.py
 ```
 
-Panel izquierdo: log en vivo + tarjetas de resumen. Panel derecho: pestañas de Problemas / Buenas prácticas / Informativo / Reporte completo.
+### API REST
+
+```bash
+uvicorn webvulnscanner.api:app --reload     # o: make api
+curl -X POST localhost:8000/scan -H 'Content-Type: application/json' \
+     -d '{"dominio": "example.com", "activos": ["recon","tls","headers"]}'
+```
+
+El modo activo **no** se expone por HTTP a propósito (la autorización es por objetivo).
+
+### Docker
+
+```bash
+make docker                                 # construye webvulnscanner:2.0
+docker run --rm -v "$PWD/reportes:/reports" webvulnscanner:2.0 example.com
+```
 
 ---
 
@@ -73,7 +107,7 @@ Panel izquierdo: log en vivo + tarjetas de resumen. Panel derecho: pestañas de 
 | `testphp.vulnweb.com` | Acunetix — PHP vulnerable de prueba |
 | `example.com` | IANA — dominio de referencia |
 
-⚠️ **NUNCA** use esta herramienta en sitios sin autorización explícita.
+⚠️ **NUNCA** use esta herramienta —y menos el modo activo— en sitios sin autorización explícita.
 
 ---
 
@@ -83,34 +117,48 @@ Panel izquierdo: log en vivo + tarjetas de resumen. Panel derecho: pestañas de 
 src/webvulnscanner/
 ├── models.py         # Núcleo puro: Finding, Risk, ScanResult (sin red ni UI)
 ├── net.py            # Utilidades HTTP/socket compartidas
-├── orchestrator.py   # Coordina los módulos, aísla fallos
-├── report.py         # Render texto/JSON (puro) + guardado (único I/O)
-├── cli.py            # Entrada de consola (argparse)
-└── modules/          # Un módulo por capacidad (recon, ports, tls, …)
+├── cache.py          # Caché en disco con TTL (crt.sh, NVD, Shodan)
+├── scoring.py        # Nota A–F ponderada
+├── orchestrator.py   # Coordina módulos en paralelo, aísla fallos, gatea lo activo
+├── report.py         # Render TXT/JSON (puro) + guardado (único I/O)
+├── html.py           # Reporte HTML autocontenido (escapa contenido remoto)
+├── sarif.py          # Export SARIF 2.1.0
+├── diff.py           # Comparación entre escaneos
+├── cli.py / api.py   # Entradas de consola y REST
+└── modules/          # Un módulo por capacidad (10 pasivos + 4 activos + shodan)
 gui.py                # Interfaz (customtkinter), habla con el núcleo vía logging
-tests/                # Suite de la lógica pura (parsing, clasificación, render)
+tests/                # 59 tests (lógica pura, orquestador, red simulada)
 ```
 
-Decisiones de diseño:
-- **Sin acoplamiento por `print`**: los módulos emiten progreso vía `logging`; CLI y GUI enganchan sus propios handlers.
-- **Render puro separado de la escritura**: `report.render_texto/json` son funciones sin efectos → testeables sin filesystem.
+**Decisiones de diseño:**
+- **Concurrencia**: los módulos independientes corren en paralelo (escaneo ~6× más rápido).
+- **Sin acoplamiento por `print`**: progreso vía `logging`; CLI, GUI y API enganchan sus handlers.
+- **Render puro separado de I/O**: `render_*` son funciones sin efectos → testeables sin filesystem/red.
 - **Fallo aislado por módulo**: si uno revienta, el escaneo continúa y lo reporta.
+- **Caché que no se envenena**: los fallos de red no se persisten (no bloquean el TTL).
+- **Modo activo estrictamente gateado**: `autorizado=True` es la única vía de cargarlo.
 
-### Tests
+### Calidad
 
 ```bash
-pytest        # 16 tests sobre lógica pura (sin red)
+make check      # ruff (lint+format) + mypy (tipado) + pytest
+make cov        # cobertura
 ```
+
+CI en GitHub Actions corre lint, tipos y tests sobre Python 3.10–3.12 en cada push.
 
 ---
 
 ## Ética y alcance
 
-Todo es **pasivo**: peticiones HTTP normales, handshakes TLS y consultas a fuentes públicas (crt.sh, NVD). **No** hay inyección de payloads, fuzzing de directorios ni fuerza bruta. La prueba de AXFR y la solicitud de rutas como `/.env` consultan recursos que el propio servidor decide exponer; úselas solo sobre objetivos autorizados.
+El núcleo es **pasivo**: peticiones HTTP normales, handshakes TLS y consultas a fuentes públicas
+(crt.sh, NVD, Shodan). El **modo activo** (`--authorized`) envía peticiones elaboradas (payloads no
+destructivos) y **solo** debe usarse sobre objetivos propios o con permiso expreso.
 
-## Limitaciones conocidas / trabajo futuro
+## Limitaciones / trabajo futuro
 
-- La correlación de CVEs usa *keyword search* del NVD (no CPE): puede traer falsos positivos.
-- No se detectan Heartbleed/ROBOT (requieren manipulación TLS a bajo nivel).
-- Detección activa (XSS/SQLi, fuzzing) queda fuera por diseño ético.
-- Posibles extensiones: integración con Shodan, scoring ponderado tipo SSL Labs, export a SARIF/HTML.
+- El modo activo es de superficie (parámetros a nivel raíz); un **crawler** para descubrir parámetros
+  y formularios sería el siguiente incremento.
+- No se detectan Heartbleed/ROBOT (requieren manipulación TLS de bajo nivel).
+- Diccionario de fuzzing corto (10 rutas); ampliable.
+- Posibles extensiones: dashboard web, publicación en PyPI, integración Censys.
