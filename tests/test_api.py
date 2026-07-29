@@ -50,11 +50,11 @@ def test_scan_filtra_modulos_desconocidos(client):
     assert fake.kw["activos"] == {"tls"}
 
 
-def test_scan_nunca_corre_modo_activo(client):
-    """El modo activo no debe ser alcanzable por HTTP."""
+def test_scan_incluye_modo_activo(client):
+    """La API ahora corre TODOS los módulos (activos incluidos)."""
     c, fake = client
     c.post("/scan", json={"dominio": "example.com", "activos": ["fuzzing", "nuclei"]})
-    assert fake.kw["activos"] == set()
+    assert fake.kw["activos"] == {"fuzzing", "nuclei"}
     assert "autorizado" not in fake.kw
 
 
