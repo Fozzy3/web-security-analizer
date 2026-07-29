@@ -13,6 +13,7 @@ import xml.etree.ElementTree as ET
 
 from webvulnscanner import tools
 from webvulnscanner.models import Finding, Risk
+from webvulnscanner.net import es_host_valido
 
 log = logging.getLogger("webvulnscanner.external")
 
@@ -164,7 +165,9 @@ def subfinder(dominio: str, *, timeout: int = 120) -> list[Finding]:
     salida = tools.ejecutar(["subfinder", "-d", dominio, "-silent"], timeout=timeout)
     if not salida:
         return []
-    subs = sorted({s.strip() for s in salida.splitlines() if s.strip()})
+    # Filtrar a hostnames reales: subfinder mezcla avisos y errores en stdout, y
+    # sin esto acababan en el reporte como "subdominios".
+    subs = sorted({s.strip().lower() for s in salida.splitlines() if es_host_valido(s)})
     if not subs:
         return []
     log.info("  [+] subfinder: %d subdominios", len(subs))

@@ -18,10 +18,24 @@ dependencies = [
 [project.optional-dependencies]
 gui = ["customtkinter>=5.2"]
 api = ["fastapi>=0.110", "uvicorn>=0.29"]
-dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.6", "mypy>=1.10"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.6", "mypy>=1.10", "httpx>=0.27"]
+# Motores externos (opcionales): si están instalados, se activan solos.
+enhanced = [
+    "sslyze>=6.0",            # análisis TLS profundo
+    "python-Wappalyzer>=0.3", # fingerprint de tecnologías + versiones
+    "setuptools",             # pkg_resources para Wappalyzer en Py>=3.12
+    "PyJWT>=2.8",             # decodificación robusta de JWT
+    "detect-secrets>=1.5",    # secretos por entropía
+    "nvdlib>=0.7",            # correlación CVE multi-componente
+]
+pdf = ["weasyprint>=60"]      # export del informe a PDF
+apifuzz = ["schemathesis>=3"] # fuzzing de API contra su OpenAPI
+# Laboratorio de red (capa 3/4): canal encubierto en IP ID (académico).
+netlab = ["scapy>=2.5", "scikit-learn>=1.3", "numpy>=1.24"]  # + netfilterqueue (necesita libnetfilter-queue-dev)
 
 [project.scripts]
 webvulnscanner = "webvulnscanner.cli:main"
+webvulnscanner-covert = "webvulnscanner.covert.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

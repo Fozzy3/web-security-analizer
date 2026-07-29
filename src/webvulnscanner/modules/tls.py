@@ -149,44 +149,21 @@ def _analizar_clave(dominio: str) -> list[Finding]:
     return findings
 
 
-def _analizar_certificado(dominio: str) -> list[Finding]:
+def _findings_cert(cert: dict[str, Any]) -> list[Finding]:
+    """Traduce el dict de `getpeercert()` a hallazgos. Puro: sin red, testeable."""
     findings: list[Finding] = []
-    ctx = ssl.create_default_context()
-    try:
-        with (
-            socket.create_connection((dominio, 443), timeout=TIMEOUT) as sock,
-            ctx.wrap_socket(sock, server_hostname=dominio) as ss,
-        ):
-            cert: dict[str, Any] = ss.getpeercert() or {}
-    except ssl.SSLCertVerificationError as e:
-        log.info("  [!] Verificación de certificado falló: %s", e.verify_message)
-        return [
-            Finding(
-                "TLS/HTTPS",
-                f"Certificado no confiable: {e.verify_message}",
-                Risk.ALTO,
-                "El certificado no valida (expirado, autofirmado, o dominio distinto). "
-                "Los navegadores mostrarán advertencia.",
-                evidencia=str(e.verify_message),
-            )
-        ]
-    except (OSError, ssl.SSLError) as e:
-        log.info("  [-] HTTPS no disponible: %s", e)
-        return [
-            Finding(
-                "TLS/HTTPS",
-                "HTTPS no disponible (443 cerrado o sin TLS)",
-                Risk.ALTO,
-                "Sin HTTPS, todo el tráfico viaja en claro y es vulnerable a MITM.",
-            )
-        ]
 
     # Expiración
     not_after = cert.get("notAfter", "")
+    exp = None
     if not_after:
-        exp = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z").replace(
-            tzinfo=datetime.timezone.utc
-        )
+        try:
+            exp = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z").replace(
+                tzinfo=datetime.timezone.utc
+            )
+        except ValueError:
+            log.info("  [-] Fecha de expiración con formato inesperado: %s", not_after)
+    if exp is not None:
         dias = (exp - datetime.datetime.now(datetime.timezone.utc)).days
         if dias < 0:
             nivel, desc = Risk.ALTO, "El certificado EXPIRÓ."
@@ -224,6 +201,40 @@ def _analizar_certificado(dominio: str) -> list[Finding]:
         )
     )
     return findings
+
+
+def _analizar_certificado(dominio: str) -> list[Finding]:
+    ctx = ssl.create_default_context()
+    try:
+        with (
+            socket.create_connection((dominio, 443), timeout=TIMEOUT) as sock,
+            ctx.wrap_socket(sock, server_hostname=dominio) as ss,
+        ):
+            cert: dict[str, Any] = ss.getpeercert() or {}
+    except ssl.SSLCertVerificationError as e:
+        log.info("  [!] Verificación de certificado falló: %s", e.verify_message)
+        return [
+            Finding(
+                "TLS/HTTPS",
+                f"Certificado no confiable: {e.verify_message}",
+                Risk.ALTO,
+                "El certificado no valida (expirado, autofirmado, o dominio distinto). "
+                "Los navegadores mostrarán advertencia.",
+                evidencia=str(e.verify_message),
+            )
+        ]
+    except (OSError, ssl.SSLError) as e:
+        log.info("  [-] HTTPS no disponible: %s", e)
+        return [
+            Finding(
+                "TLS/HTTPS",
+                "HTTPS no disponible (443 cerrado o sin TLS)",
+                Risk.ALTO,
+                "Sin HTTPS, todo el tráfico viaja en claro y es vulnerable a MITM.",
+            )
+        ]
+
+    return _findings_cert(cert)
 
 
 def _redireccion_https(dominio: str) -> Finding | None:

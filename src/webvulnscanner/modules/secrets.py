@@ -30,6 +30,46 @@ _PATRONES = {
 }
 
 
+# Booster opcional: detección por entropía (detect-secrets). Conservador para
+# no ahogar en falsos positivos de JS minificado: umbral alto y cota de resultados.
+_DS_PLUGINS: list | None
+try:
+    from detect_secrets.plugins.high_entropy_strings import (
+        Base64HighEntropyString,
+        HexHighEntropyString,
+    )
+
+    _DS_PLUGINS = [Base64HighEntropyString(limit=4.5), HexHighEntropyString(limit=3.0)]
+except Exception:  # noqa: BLE001
+    _DS_PLUGINS = None
+
+
+# Solo se considera entropía en líneas que "huelen" a secreto asignado; y se
+# excluyen hashes públicos (SRI) que también son de alta entropía pero no secretos.
+_PALABRAS_SECRETO = ("key", "token", "secret", "passw", "pwd", "auth", "bearer", "credential", "apikey")
+_EXCLUIR_ENTROPIA = ("integrity", "sha256-", "sha384-", "sha512-", "srcset", "data:image")
+
+
+def _por_entropia(texto: str, *, max_hits: int = 5) -> list[tuple[str, Risk, str]]:
+    if not _DS_PLUGINS:
+        return []
+    hallados: list[tuple[str, Risk, str]] = []
+    vistos: set[str] = set()
+    for linea in texto.splitlines():
+        low = linea.lower()
+        if any(x in low for x in _EXCLUIR_ENTROPIA) or not any(k in low for k in _PALABRAS_SECRETO):
+            continue
+        for plugin in _DS_PLUGINS:
+            for h in plugin.analyze_line(filename="x", line=linea):
+                v = h.secret_value or ""
+                if len(v) >= 24 and v[:16] not in vistos:
+                    vistos.add(v[:16])
+                    hallados.append(("Cadena de alta entropía (posible secreto)", Risk.MEDIO, v[:12] + "…"))
+                    if len(hallados) >= max_hits:
+                        return hallados
+    return hallados
+
+
 def escanear_texto(texto: str) -> list[tuple[str, Risk, str]]:
     """Devuelve (tipo, nivel, muestra) por cada secreto encontrado (deduplicado)."""
     vistos: set[str] = set()
@@ -42,6 +82,7 @@ def escanear_texto(texto: str) -> list[tuple[str, Risk, str]]:
                 continue
             vistos.add(clave)
             hallados.append((tipo, nivel, frag[:12] + "…"))
+    hallados.extend(_por_entropia(texto))
     return hallados
 
 
