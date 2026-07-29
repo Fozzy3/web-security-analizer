@@ -32,6 +32,16 @@ def _patch_todo(monkeypatch, ip="1.2.3.4"):
     monkeypatch.setattr(orch.webchecks, "analizar", lambda *a: [])
     monkeypatch.setattr(orch.retire_js, "analizar_scripts", lambda *a: [])
     monkeypatch.setattr(orch.secrets, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.csrf, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.jwt_audit, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.api_discovery, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.cloud, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.mail_transport, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.sbom, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.wordpress, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.frameworks, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.stack, "analizar", lambda *a, **k: [])
+    monkeypatch.setattr(orch.tls_deep, "analizar", lambda *a, **k: [])
     monkeypatch.setattr(orch.crawler, "rastrear", lambda *a, **k: orch.crawler.Crawl())
     for fn in ("subfinder", "testssl", "nuclei", "nmap", "wpscan"):
         monkeypatch.setattr(orch.external, fn, lambda *a, **k: [])
@@ -55,6 +65,49 @@ def test_run_scan_ensambla_todos_los_modulos(monkeypatch):
         "fingerprint",
         "cve",
     } <= modulos
+
+
+def test_run_scan_activa_la_sesion(monkeypatch):
+    """La sesión (auth + throttle) debe fijarse en net antes de correr módulos."""
+    from webvulnscanner import net
+
+    activada: dict = {}
+    monkeypatch.setattr(orch, "configurar_sesion", lambda s: activada.setdefault("s", s))
+    monkeypatch.setattr(orch, "fetch", lambda d: None)
+    monkeypatch.setattr(orch, "_run_recon", lambda d, r: ([], {}))  # sin ip → corte temprano
+    sesion = net.Sesion(headers={"Cookie": "sid=abc"}, delay=0.2)
+    orch.run_scan("example.com", sesion=sesion, activos=set())
+    assert activada["s"] is sesion
+
+
+def test_run_scan_sin_sesion_no_falla(monkeypatch):
+    monkeypatch.setattr(orch, "fetch", lambda d: None)
+    monkeypatch.setattr(orch, "_run_recon", lambda d, r: ([], {}))
+    # No debe lanzar aunque no se pase sesión.
+    orch.run_scan("example.com", activos=set())
+
+
+def test_dedupe_cves_elimina_repetidos():
+    from webvulnscanner.models import Finding, Risk
+
+    fs = [
+        Finding("CVE", "CVE-2021-23017 — nginx 1.18.0", Risk.ALTO, "d"),
+        Finding("CVE", "CVE-2021-23017 — Nginx 1.18.0 (por stack)", Risk.ALTO, "d"),  # duplicado
+        Finding("CVE", "CVE-2023-44487 — nginx", Risk.ALTO, "d"),
+        Finding("Headers", "otro hallazgo", Risk.BAJO, "d"),
+    ]
+    out = orch._dedupe_cves(fs)
+    ids = [f.hallazgo.split(" ")[0] for f in out if f.hallazgo.startswith("CVE-")]
+    assert ids == ["CVE-2021-23017", "CVE-2023-44487"]  # sin el duplicado
+    assert len(out) == 3
+
+
+def test_csrf_es_pasivo_inyeccion_es_activa():
+    """CSRF (pasivo) disponible siempre; la inyección profunda solo con autorización."""
+    pasivos = {n for n, _ in orch.MODULOS}
+    activos = {n for n, _ in orch.MODULOS_ACTIVOS}
+    assert "csrf" in pasivos and "csrf" not in activos
+    assert "inyeccion" in activos and "inyeccion" not in pasivos
 
 
 def test_run_scan_respeta_activos(monkeypatch):

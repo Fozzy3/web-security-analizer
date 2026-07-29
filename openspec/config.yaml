@@ -1,0 +1,55 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Proyecto: webvulnscanner 2.0 — auditor de seguridad web (pasivo + activo gateado).
+  Stack: Python >=3.10, src-layout, dnspython + cryptography; extras gui/api/dev.
+  Arquitectura: núcleo puro (models) ← módulos aislados ← orquestador concurrente;
+    net.py es la única frontera de red; report/sarif/diff separan render de escritura.
+  Testing: pytest (170 tests, ~72% cov), red simulada vía monkeypatch, FastAPI TestClient.
+  Estilo: ruff (lint E/F/W/I/UP/B/SIM + format), mypy estricto, line-length 110.
+  CI: GitHub Actions (lint + tipos + tests) sobre Py 3.10–3.12. Conventional commits, sin co-author.
+
+strict_tdd: true
+
+testing:
+  strict_tdd: true
+  runner:
+    command: pytest
+    framework: pytest
+  layers:
+    unit: { available: true, tool: pytest }
+    integration: { available: true, tool: "pytest + fastapi.TestClient + httpx (red vía monkeypatch)" }
+    e2e: { available: false, tool: null }
+  coverage:
+    available: true
+    command: pytest --cov=webvulnscanner --cov-report=term-missing
+  quality:
+    linter: { available: true, command: ruff check . }
+    typechecker: { available: true, command: mypy }
+    formatter: { available: true, command: ruff format . }
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Identify affected modules/packages
+    - Módulos activos SIEMPRE gateados tras autorizado=True; nunca por HTTP abierto
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group tasks by phase (infrastructure, implementation, testing)
+    - Use hierarchical numbering (1.1, 1.2, etc.)
+    - Keep tasks small enough to complete in one session
+  apply:
+    - Follow existing code patterns and conventions (net.py única frontera de red)
+    - Payloads activos no destructivos; validación en frontera (normalizar_dominio)
+    - TDD estricto: test primero, luego implementación
+  verify:
+    - Run `make check` (ruff + mypy + pytest) — debe pasar limpio
+    - Compare implementation against every spec scenario
+  archive:
+    - Warn before merging destructive deltas (large removals)

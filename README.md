@@ -130,7 +130,7 @@ src/webvulnscanner/
 ├── cli.py / api.py   # Entradas de consola y REST
 └── modules/          # Un módulo por capacidad (10 pasivos + 4 activos + shodan)
 gui.py                # Interfaz (customtkinter), habla con el núcleo vía logging
-tests/                # 59 tests (lógica pura, orquestador, red simulada)
+tests/                # 285 tests (lógica pura, orquestador, CLI/API, red simulada)
 ```
 
 **Decisiones de diseño:**

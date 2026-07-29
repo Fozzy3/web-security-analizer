@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
 
-from webvulnscanner import __version__, diff, sarif
+from webvulnscanner import __version__, baseline, diff, informe, pdf, sarif, sbom
 from webvulnscanner.models import Risk
+from webvulnscanner.net import Sesion
 from webvulnscanner.orchestrator import MODULOS, MODULOS_ACTIVOS, run_scan
 from webvulnscanner.report import guardar, render_texto
 
@@ -16,8 +18,10 @@ _MODULOS_VALIDOS = [n for n, _ in MODULOS]
 _MODULOS_ACTIVOS = [n for n, _ in MODULOS_ACTIVOS]
 
 # Perfiles de escaneo (C5): subconjuntos de módulos para casos comunes.
-_PERFILES = {
-    "full": set(_MODULOS_VALIDOS),
+# "full" es None a propósito: significa "todo lo disponible", que con
+# --authorized incluye los módulos activos (un set fijo los dejaría fuera).
+_PERFILES: dict[str, set[str] | None] = {
+    "full": None,
     "quick": {"recon", "tls", "headers", "waf", "fingerprint"},
     "tls": {"recon", "tls"},
     "web": {"recon", "headers", "waf", "fingerprint", "disclosure"},
@@ -41,21 +45,65 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--sarif", action="store_true", help="además, escribir reporte .sarif (CI/GitHub)")
     p.add_argument("--diff", metavar="PREV.json", help="comparar contra un reporte .json anterior")
     p.add_argument(
+        "--baseline", metavar="FILE", help="suprimir hallazgos listados en el baseline (def: .wvsignore)"
+    )
+    p.add_argument(
+        "--write-baseline", metavar="FILE", help="escribir el escaneo actual como baseline aceptado"
+    )
+    p.add_argument("--sbom", metavar="FILE", help="escribir un SBOM CycloneDX de los componentes detectados")
+    p.add_argument(
+        "--pdf", action="store_true", help="además, exportar el reporte HTML a PDF (requiere extra 'pdf')"
+    )
+    p.add_argument(
         "--authorized",
         action="store_true",
         help="habilita módulos ACTIVOS (cookies, CORS, XSS/SQLi, fuzzing). "
         "SOLO en objetivos propios o con autorización expresa.",
     )
+    p.add_argument(
+        "--rl-burst",
+        type=int,
+        default=12,
+        metavar="N",
+        help="tamaño de la ráfaga del módulo rate_limit (API4:2023, def: 12); respeta --delay/--rps",
+    )
     p.add_argument("--no-save", action="store_true", help="no escribir archivos, solo consola")
     p.add_argument("--no-parallel", action="store_true", help="ejecutar módulos en secuencia")
     p.add_argument("-q", "--quiet", action="store_true", help="silenciar el log de progreso")
     p.add_argument("--version", action="version", version=f"WebVulnScanner {__version__}")
+
+    # Sesión: credenciales para escanear zonas autenticadas + cortesía (throttle).
+    g = p.add_argument_group("sesión / cortesía")
+    g.add_argument("--cookie", metavar="C", help="cookie de sesión (ej: 'sid=abc')")
+    g.add_argument("--bearer", metavar="TOKEN", help="token Bearer (cabecera Authorization)")
+    g.add_argument(
+        "--header", metavar="'K: V'", action="append", default=[], help="cabecera extra (repetible)"
+    )
+    g.add_argument("--delay", type=float, metavar="SEG", help="espera entre peticiones (segundos)")
+    g.add_argument("--rps", type=float, metavar="N", help="límite de peticiones/segundo (alt. a --delay)")
     return p.parse_args(argv)
+
+
+def _construir_sesion(args: argparse.Namespace) -> Sesion:
+    """Arma la Sesion (headers de auth + throttle) desde los flags."""
+    headers: dict[str, str] = {}
+    if args.cookie:
+        headers["Cookie"] = args.cookie
+    if args.bearer:
+        headers["Authorization"] = f"Bearer {args.bearer}"
+    for h in args.header:
+        clave, sep, valor = h.partition(":")
+        if sep:
+            headers[clave.strip()] = valor.strip()
+    # --delay tiene prioridad; si no, se deriva de --rps; por defecto 0.
+    delay = args.delay if args.delay is not None else (1.0 / args.rps if args.rps else 0.0)
+    return Sesion(headers=headers, delay=delay)
 
 
 def _resolver_activos(profile: str | None, only: str | None, skip: str | None, autorizado: bool) -> set[str]:
     base = set(_MODULOS_VALIDOS) | (set(_MODULOS_ACTIVOS) if autorizado else set())
-    activos = set(_PERFILES[profile]) if profile else set(base)
+    seleccion = _PERFILES[profile] if profile else None
+    activos = set(seleccion) if seleccion is not None else set(base)
     if only:
         activos = {m.strip() for m in only.split(",") if m.strip()}
     if skip:
@@ -75,7 +123,11 @@ def main(argv: list[str] | None = None) -> int:
         stream=sys.stdout,
     )
 
-    dominio = args.dominio or input("\n  Dominio objetivo (ej: example.com): ").strip()
+    # Solo se pregunta en modo interactivo: en un pipe o en CI, input() colgaría
+    # el proceso o reventaría con EOFError en vez de dar un error legible.
+    dominio = args.dominio or ""
+    if not dominio and sys.stdin.isatty():
+        dominio = input("\n  Dominio objetivo (ej: example.com): ").strip()
     if not dominio:
         print("Error: debe indicar un dominio.", file=sys.stderr)
         return 1
@@ -88,7 +140,33 @@ def main(argv: list[str] | None = None) -> int:
         print("  ⚠ MODO ACTIVO — solo para objetivos autorizados")
     print("=" * 60)
 
-    result = run_scan(dominio, activos=activos, paralelo=not args.no_parallel, autorizado=args.authorized)
+    try:
+        result = run_scan(
+            dominio,
+            activos=activos,
+            paralelo=not args.no_parallel,
+            autorizado=args.authorized,
+            sesion=_construir_sesion(args),
+            rl_burst=args.rl_burst,
+        )
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    if args.sbom:
+        doc = sbom.generar(sbom.componentes_de(result.findings))
+        Path(args.sbom).write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"  SBOM CycloneDX escrito: {args.sbom} ({len(doc['components'])} componentes)")
+
+    # Baseline: escribir el escaneo como aceptado, o suprimir lo ya aceptado.
+    if args.write_baseline:
+        baseline.escribir(args.write_baseline, result.findings)
+        print(f"  Baseline escrito: {args.write_baseline} ({len(result.findings)} hallazgos)")
+    ruta_baseline = args.baseline or (".wvsignore" if Path(".wvsignore").exists() else None)
+    if ruta_baseline:
+        antes = len(result.findings)
+        result.findings = baseline.filtrar(result.findings, baseline.cargar(ruta_baseline))
+        print(f"  Baseline aplicado ({ruta_baseline}): {antes - len(result.findings)} suprimidos")
 
     print("\n" + render_texto(result))
 
@@ -98,11 +176,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.no_save:
         txt, js, htm = guardar(result, args.output)
-        print(f"  Reportes guardados:\n  → {txt}\n  → {js}\n  → {htm}")
+        # Informe curado de 3 pestañas, generado automáticamente desde el escaneo.
+        ruta_informe = Path(args.output) / "informe.html"
+        ruta_informe.write_text(informe.generar(result), encoding="utf-8")
+        print(f"  Reportes guardados:\n  → {ruta_informe}\n  → {js}")
         if args.sarif:
             ruta_sarif = Path(txt).with_suffix(".sarif")
             ruta_sarif.write_text(sarif.render(result), encoding="utf-8")
             print(f"  → {ruta_sarif}")
+        if args.pdf:
+            ruta_pdf = pdf.html_a_pdf(ruta_informe)  # PDF del informe curado
+            if ruta_pdf:
+                print(f"  → {ruta_pdf}")
+            else:
+                print("  (PDF omitido: instale el extra 'pdf' — pip install '.[pdf]')", file=sys.stderr)
 
     # Código de salida distinto de 0 si hay hallazgos de riesgo alto.
     return 2 if result.conteo()[Risk.ALTO] else 0

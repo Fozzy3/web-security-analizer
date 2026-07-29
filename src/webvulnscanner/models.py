@@ -54,7 +54,10 @@ class Finding:
     descripcion: str
     referencia: str | None = None
     evidencia: str | None = None
-    owasp: str | None = None  # categoría OWASP Top 10 2021, p.ej. "A05:2021"
+    owasp: str | None = None  # categoría OWASP Top 10 2025, p.ej. "A02:2025"
+    api: str | None = None  # categoría API Security Top 10 2023, p.ej. "API4:2023"
+    cwe: str | None = None  # clase de debilidad, p.ej. "CWE-79"
+    cvss: dict | None = None  # {"vector": str, "score": float} (CVSS v3.1 base)
 
     def to_dict(self) -> dict:
         return {
@@ -65,6 +68,9 @@ class Finding:
             "referencia": self.referencia,
             "evidencia": self.evidencia,
             "owasp": self.owasp,
+            "api": self.api,
+            "cwe": self.cwe,
+            "cvss": self.cvss,
         }
 
     @classmethod
@@ -77,6 +83,9 @@ class Finding:
             referencia=d.get("referencia"),
             evidencia=d.get("evidencia"),
             owasp=d.get("owasp"),
+            api=d.get("api"),  # ausente en reportes previos → None (retrocompat)
+            cwe=d.get("cwe"),  # ausente en reportes previos → None (retrocompat)
+            cvss=d.get("cvss"),
         )
 
 

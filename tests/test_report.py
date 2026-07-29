@@ -26,6 +26,27 @@ def test_render_texto_incluye_secciones_y_conteo():
     assert "BUENAS PRÁCTICAS CONFIRMADAS" in txt
 
 
+def test_render_texto_muestra_cwe_cvss_y_compliance():
+    r = ScanResult(
+        "ej.com",
+        ip="1.2.3.4",
+        findings=[
+            Finding(
+                "Inyección",
+                "Posible XSS reflejado en / (parámetro 'q', GET)",
+                Risk.ALTO,
+                "d",
+                owasp="A05:2025",
+                cwe="CWE-79",
+                cvss={"vector": "CVSS:3.1/...", "score": 6.1},
+            )
+        ],
+    )
+    txt = report.render_texto(r, timestamp="2026-01-01 00:00:00")
+    assert "CWE-79" in txt and "6.1" in txt
+    assert "CUMPLIMIENTO" in txt.upper()  # sección de controles afectados
+
+
 def test_render_json_valido_y_completo():
     js = json.loads(report.render_json(_result(), timestamp="2026-01-01 00:00:00"))
     assert js["meta"]["dominio"] == "ej.com"

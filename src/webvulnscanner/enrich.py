@@ -46,7 +46,9 @@ def epss_scores(cve_ids: list[str], *, timeout: int = 20) -> dict[str, float]:
     if not cve_ids:
         return {}
     url = _EPSS_URL.format(cves=",".join(sorted(set(cve_ids))))
-    datos = cached_json(f"epss:{hash(url)}", 21_600, lambda: _descargar(url, timeout))
+    # La clave debe ser estable entre procesos: hash() de str va sembrado al
+    # azar (PYTHONHASHSEED), así que usarlo aquí anulaba la caché por completo.
+    datos = cached_json(f"epss:{url}", 21_600, lambda: _descargar(url, timeout))
     if not isinstance(datos, dict):
         return {}
     return {d["cve"]: float(d.get("epss", 0.0)) for d in datos.get("data", [])}

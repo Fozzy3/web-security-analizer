@@ -36,7 +36,14 @@ def render(result: ScanResult) -> str:
                 "ruleId": rid,
                 "level": _NIVEL_SARIF[f.riesgo],
                 "message": {"text": f"{f.hallazgo} — {f.descripcion}"},
-                "properties": {"riesgo": f.riesgo.value, "referencia": f.referencia},
+                "properties": {
+                    "riesgo": f.riesgo.value,
+                    "referencia": f.referencia,
+                    "owasp": f.owasp,
+                    "api": f.api,
+                    "cwe": f.cwe,
+                    "cvss": f.cvss["score"] if f.cvss else None,
+                },
                 "locations": [{"physicalLocation": {"artifactLocation": {"uri": result.dominio}}}],
             }
         )

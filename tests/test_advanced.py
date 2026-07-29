@@ -33,6 +33,22 @@ def test_secrets_sin_falsos_positivos():
     assert secrets.escanear_texto("solo texto normal sin claves aquí") == []
 
 
+def test_secrets_entropia_detecta_cadena_random():
+    """El booster capta entropía solo cerca de una palabra clave de secreto."""
+    if secrets._DS_PLUGINS is None:
+        return  # sin detect-secrets; no aplica
+    r = secrets.escanear_texto('api_key = "dGhpc0lzQVZlcnlMb25nUmFuZG9tU2VjcmV0VG9rZW5YWVpBQkNE"')
+    assert any("entrop" in t.lower() for t, _, _ in r)
+
+
+def test_secrets_entropia_ignora_hash_sri():
+    """Un hash SRI (sha384-…) es alta entropía pero NO un secreto: no debe reportarse."""
+    if secrets._DS_PLUGINS is None:
+        return
+    sri = '<script integrity="sha384-nYX0j9Q8bXcVeryLongBase64IntegrityHashValueABCDEF1234567890"></script>'
+    assert secrets.escanear_texto(sri) == []
+
+
 # ── webchecks ─────────────────────────────────────────────────
 def test_webchecks_mixed_content():
     fs = webchecks.analizar(_resp('<img src="http://cdn.com/a.png">', esquema="https"))
@@ -49,18 +65,32 @@ def test_webchecks_password_sobre_http():
     assert any(f.riesgo == Risk.ALTO for f in fs)
 
 
-# ── owasp ─────────────────────────────────────────────────────
+# ── owasp (Top 10 2025) ───────────────────────────────────────
 def test_owasp_etiqueta_por_modulo():
     fs = [Finding("TLS/HTTPS", "h", Risk.ALTO, "d"), Finding("Inyección", "h", Risk.ALTO, "d")]
     owasp.etiquetar(fs)
-    assert fs[0].owasp == "A02:2021"
-    assert fs[1].owasp == "A03:2021"
+    assert fs[0].owasp == "A04:2025"  # cripto (era A02:2021)
+    assert fs[1].owasp == "A05:2025"  # injection (era A03:2021)
 
 
 def test_owasp_takeover_es_a01():
     fs = [Finding("Subdominios", "Posible subdomain takeover: x", Risk.ALTO, "d")]
     owasp.etiquetar(fs)
-    assert fs[0].owasp == "A01:2021"
+    assert fs[0].owasp == "A01:2025"
+
+
+def test_owasp_normaliza_ssrf_2021_a_a01_2025():
+    """SSRF era A10:2021; en 2025 se fusionó en A01 Broken Access Control."""
+    fs = [Finding("Cloud", "Referencia a metadata", Risk.MEDIO, "d", owasp="A10:2021")]
+    owasp.etiquetar(fs)
+    assert fs[0].owasp == "A01:2025"
+
+
+def test_owasp_normaliza_componentes_2021_a_supply_chain_2025():
+    """Vulnerable Components (A06:2021) → Software Supply Chain Failures (A03:2025)."""
+    fs = [Finding("JS vulnerable", "jquery viejo", Risk.MEDIO, "d", owasp="A06:2021")]
+    owasp.etiquetar(fs)
+    assert fs[0].owasp == "A03:2025"
 
 
 # ── enrich (EPSS + KEV) ───────────────────────────────────────

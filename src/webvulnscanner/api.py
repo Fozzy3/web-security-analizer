@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from webvulnscanner import __version__, scoring
@@ -36,7 +36,10 @@ def health() -> dict:
 @app.post("/scan")
 def scan(req: ScanRequest) -> dict:
     activos = set(req.activos) & set(_MODULOS) if req.activos else set(_MODULOS)
-    result = run_scan(req.dominio, activos=activos)  # autorizado=False: solo pasivo
+    try:
+        result = run_scan(req.dominio, activos=activos)  # autorizado=False: solo pasivo
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     ltr, pts = scoring.calcular(result)
     return {
         "nota": ltr,

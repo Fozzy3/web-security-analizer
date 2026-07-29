@@ -8,30 +8,46 @@ propios handlers), no secuestrando sys.stdout.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
-from webvulnscanner import crawler, enrich, owasp
+from webvulnscanner import classify, crawler, enrich, owasp, sbom
 from webvulnscanner.models import Finding, Risk, ScanResult
 from webvulnscanner.modules import (
+    access_control,
     active,
+    api_discovery,
+    api_fuzz,
+    auth_test,
+    cloud,
+    csrf,
     cve,
     disclosure,
     dns_records,
+    error_audit,
     external,
     fingerprint,
+    frameworks,
     headers,
+    jwt_audit,
+    mail_transport,
     ports,
+    rate_limit,
     recon,
     retire_js,
     secrets,
     shodan_intel,
+    ssrf,
+    stack,
     subdomains,
     tls,
+    tls_deep,
     waf,
     webchecks,
+    wordpress,
 )
-from webvulnscanner.net import fetch
+from webvulnscanner.net import Sesion, configurar_sesion, fetch, normalizar_dominio
 
 log = logging.getLogger("webvulnscanner")
 
@@ -40,15 +56,25 @@ MODULOS = [
     ("recon", "Reconocimiento (Footprinting)"),
     ("ports", "Escaneo de Puertos + Banners"),
     ("tls", "Análisis TLS / HTTPS"),
+    ("tls_deep", "TLS profundo (sslyze, opcional)"),
     ("headers", "Encabezados HTTP de Seguridad"),
     ("dns", "Registros DNS y Seguridad de Correo"),
     ("subdomains", "Subdominios (Certificate Transparency)"),
     ("disclosure", "Archivos y Rutas Sensibles"),
     ("waf", "Detección de WAF / CDN"),
     ("fingerprint", "Fingerprint de Tecnologías"),
+    ("stack", "Stack extendido (Wappalyzer) + CVE por componente"),
+    ("wordpress", "WordPress (endpoints y enumeración)"),
+    ("frameworks", "Frameworks/CMS (Drupal, Joomla, Laravel, paneles)"),
     ("webchecks", "Mixed content / SRI / Formularios"),
+    ("csrf", "CSRF (formularios sin token)"),
     ("retirejs", "Librerías JS Vulnerables"),
     ("secrets", "Secretos Expuestos"),
+    ("jwt", "Debilidades en JWT"),
+    ("api", "Superficie de API (OpenAPI/GraphQL)"),
+    ("cloud", "Misconfiguración Cloud"),
+    ("mail_transport", "MTA-STS / TLS-RPT"),
+    ("sbom", "Supply Chain / Dependency Confusion"),
     ("cve", "Correlación de CVEs (NVD)"),
     ("shodan", "Inteligencia Shodan (opcional)"),
     ("subfinder", "Subdominios (subfinder, externo)"),
@@ -62,6 +88,12 @@ MODULOS_ACTIVOS = [
     ("inyeccion", "Inyección Reflejada (XSS/SQLi)"),
     ("open_redirect", "Open Redirect"),
     ("fuzzing", "Fuzzing de Rutas"),
+    ("access_control", "Control de Acceso (IDOR / forced browsing)"),
+    ("auth_test", "Fallos de Autenticación"),
+    ("ssrf", "SSRF / Host Header Injection"),
+    ("error_audit", "Manejo de Errores (stack traces / debug)"),
+    ("rate_limit", "Rate Limiting (consumo de recursos)"),
+    ("api_fuzz", "Fuzzing de API (schemathesis, opcional)"),
     ("nuclei", "nuclei (plantillas, externo)"),
     ("nmap", "nmap --script vuln (externo)"),
     ("wpscan", "WPScan (externo)"),
@@ -88,6 +120,8 @@ def run_scan(
     paralelo: bool = True,
     max_workers: int = 8,
     autorizado: bool = False,
+    sesion: Sesion | None = None,
+    rl_burst: int = 12,
 ) -> ScanResult:
     """Ejecuta el escaneo completo (o el subconjunto en `activos`).
 
@@ -97,9 +131,15 @@ def run_scan(
 
     Los módulos ACTIVOS (Fase D) solo se ejecutan con `autorizado=True`, ya que
     envían peticiones elaboradas al objetivo (requiere autorización expresa).
+
+    `sesion` fija credenciales de auth y throttle para TODAS las peticiones
+    (escaneo autenticado). Lanza ValueError si `dominio` no es un hostname válido.
+    `rl_burst` fija el tamaño de ráfaga del módulo rate_limit (API4:2023).
     """
     activos = activos or {n for n, _ in MODULOS}
-    dominio = dominio.strip().replace("https://", "").replace("http://", "").rstrip("/")
+    if sesion is not None:
+        configurar_sesion(sesion)  # auth + throttle para todos los módulos
+    dominio = normalizar_dominio(dominio)  # lanza ValueError si no es un host
 
     respuesta = fetch(dominio)  # una sola petición compartida por varios módulos
     result = ScanResult(dominio=dominio)
@@ -125,15 +165,25 @@ def run_scan(
     trabajos: dict[str, Callable[[], list[Finding]]] = {
         "ports": lambda: ports.analizar(info["ip"]),
         "tls": lambda: tls.analizar(dominio),
+        "tls_deep": lambda: tls_deep.analizar(dominio),
         "headers": lambda: headers.analizar(respuesta),
         "dns": lambda: dns_records.analizar(dominio),
         "subdomains": lambda: subdomains.analizar(dominio),
         "disclosure": lambda: disclosure.analizar(dominio),
         "waf": lambda: waf.analizar(respuesta),
         "fingerprint": lambda: fingerprint.analizar(respuesta),
+        "stack": lambda: stack.analizar(dominio, respuesta),
+        "wordpress": lambda: wordpress.analizar(dominio),
+        "frameworks": lambda: frameworks.analizar(dominio),
         "webchecks": lambda: webchecks.analizar(respuesta),
+        "csrf": lambda: csrf.analizar(respuesta, crawl),
         "retirejs": lambda: retire_js.analizar_scripts(crawl.scripts),
         "secrets": lambda: secrets.analizar(dominio, crawl.scripts),
+        "jwt": lambda: jwt_audit.analizar(dominio, crawl.scripts),
+        "api": lambda: api_discovery.analizar(dominio),
+        "cloud": lambda: cloud.analizar(dominio, crawl.scripts),
+        "mail_transport": lambda: mail_transport.analizar(dominio),
+        "sbom": lambda: sbom.analizar(dominio, crawl.scripts),
         "cve": lambda: cve.analizar(info.get("producto"), info.get("version")),
         "shodan": lambda: shodan_intel.analizar(info.get("ip")),
         "subfinder": lambda: external.subfinder(dominio),
@@ -150,6 +200,12 @@ def run_scan(
                 "inyeccion": lambda: active.analizar_inyeccion(dominio, crawl),
                 "open_redirect": lambda: active.analizar_open_redirect(dominio, crawl),
                 "fuzzing": lambda: active.analizar_fuzzing(dominio),
+                "access_control": lambda: access_control.analizar(dominio, crawl),
+                "auth_test": lambda: auth_test.analizar(dominio, crawl, info.get("producto")),
+                "ssrf": lambda: ssrf.analizar(dominio, crawl),
+                "error_audit": lambda: error_audit.analizar(dominio),
+                "rate_limit": lambda: rate_limit.analizar(dominio, burst=rl_burst),
+                "api_fuzz": lambda: api_fuzz.analizar(dominio),
                 "nuclei": lambda: external.nuclei(dominio),
                 "nmap": lambda: external.nmap(info["ip"]),
                 "wpscan": lambda: external.wpscan(dominio),
@@ -173,10 +229,30 @@ def run_scan(
             log.info("\n[MÓDULO] %s\n%s", etiquetas.get(nombre, nombre), "─" * 48)
             result.findings.extend(resultados[nombre])
 
-    # Post-proceso: priorización (EPSS/KEV) y etiquetado OWASP.
+    # Post-proceso: dedup de CVEs (el mismo CVE puede venir del módulo cve y de stack),
+    # priorización (EPSS/KEV), etiquetado OWASP 2025 y CWE/CVSS.
+    result.findings = _dedupe_cves(result.findings)
     enrich.enriquecer(result.findings)
     owasp.etiquetar(result.findings)
+    classify.clasificar(result.findings)
     return result
+
+
+_RE_CVE_ID = re.compile(r"CVE-\d{4}-\d{4,}")
+
+
+def _dedupe_cves(findings: list[Finding]) -> list[Finding]:
+    """Elimina hallazgos de un mismo CVE repetido (mantiene el primero)."""
+    vistos: set[str] = set()
+    salida: list[Finding] = []
+    for f in findings:
+        m = _RE_CVE_ID.search(f.hallazgo)
+        if m:
+            if m.group() in vistos:
+                continue
+            vistos.add(m.group())
+        salida.append(f)
+    return salida
 
 
 def _ejecutar_crawler(dominio: str) -> crawler.Crawl:

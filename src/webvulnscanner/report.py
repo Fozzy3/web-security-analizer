@@ -8,9 +8,9 @@ import datetime
 import json
 from pathlib import Path
 
+from webvulnscanner import compliance, scoring
 from webvulnscanner import html as html_report
-from webvulnscanner import scoring
-from webvulnscanner.models import Risk, ScanResult
+from webvulnscanner.models import Finding, Risk, ScanResult
 
 _TITULOS = {
     Risk.ALTO: "PROBLEMAS CRÍTICOS",
@@ -18,6 +18,20 @@ _TITULOS = {
     Risk.BAJO: "OBSERVACIONES (bajo impacto)",
     Risk.INFO: "INFORMACIÓN",
 }
+
+
+def _etiquetas(h: Finding) -> str:
+    """Línea compacta OWASP / CWE / CVSS de un hallazgo (lo que tenga)."""
+    partes = []
+    if h.owasp:
+        partes.append(f"OWASP {h.owasp}")
+    if h.api:
+        partes.append(h.api)
+    if h.cwe:
+        partes.append(h.cwe)
+    if h.cvss:
+        partes.append(f"CVSS {h.cvss['score']}")
+    return " · ".join(partes)
 
 
 def render_texto(result: ScanResult, *, timestamp: str | None = None) -> str:
@@ -55,6 +69,9 @@ def render_texto(result: ScanResult, *, timestamp: str | None = None) -> str:
         for i, h in enumerate(items, 1):
             add(f"\n  [{i}] [{h.modulo}] {h.hallazgo}")
             add(f"      ↳ {h.descripcion}")
+            etiquetas = _etiquetas(h)
+            if etiquetas:
+                add(f"      ↳ {etiquetas}")
             if h.referencia:
                 add(f"      ↳ ref: {h.referencia}")
 
@@ -66,10 +83,27 @@ def render_texto(result: ScanResult, *, timestamp: str | None = None) -> str:
         for h in ok:
             add(f"  [✓] [{h.modulo}] {h.hallazgo}")
 
+    compliance_txt = _render_compliance(result.findings)
+    if compliance_txt:
+        add(compliance_txt)
+
     add(f"\n{'=' * 70}")
     add("  AVISO LEGAL: uso académico y ético. Solo analice sitios propios o")
     add("  con autorización expresa.")
     add(f"{'=' * 70}\n")
+    return "\n".join(L)
+
+
+def _render_compliance(findings: list[Finding]) -> str:
+    """Sección 'Controles afectados' por marco (PCI/ISO/NIST)."""
+    resumen = compliance.resumen(findings)
+    if not resumen:
+        return ""
+    L = [f"\n{'─' * 70}", "  CUMPLIMIENTO — Controles afectados", f"{'─' * 70}"]
+    for marco in sorted(resumen):
+        controles = resumen[marco]
+        detalle = ", ".join(f"{c} ({n})" for c, n in sorted(controles.items()))
+        L.append(f"  {marco}: {detalle}")
     return "\n".join(L)
 
 
