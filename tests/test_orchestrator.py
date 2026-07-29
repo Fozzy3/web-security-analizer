@@ -43,8 +43,14 @@ def _patch_todo(monkeypatch, ip="1.2.3.4"):
     monkeypatch.setattr(orch.stack, "analizar", lambda *a, **k: [])
     monkeypatch.setattr(orch.tls_deep, "analizar", lambda *a, **k: [])
     monkeypatch.setattr(orch.crawler, "rastrear", lambda *a, **k: orch.crawler.Crawl())
+    monkeypatch.setattr(orch.shodan_intel, "analizar", lambda *a, **k: [])  # InternetDB: sin red en tests
     for fn in ("subfinder", "testssl", "nuclei", "nmap", "wpscan"):
         monkeypatch.setattr(orch.external, fn, lambda *a, **k: [])
+    # Módulos ACTIVOS: ahora corren siempre (sin gate) → mockear para no tocar red.
+    for fn in ("analizar_cookies", "analizar_cors", "analizar_inyeccion", "analizar_open_redirect", "analizar_fuzzing"):
+        monkeypatch.setattr(orch.active, fn, lambda *a, **k: [])
+    for mod in ("access_control", "auth_test", "ssrf", "error_audit", "rate_limit", "api_fuzz"):
+        monkeypatch.setattr(getattr(orch, mod), "analizar", lambda *a, **k: [])
 
 
 def test_run_scan_ensambla_todos_los_modulos(monkeypatch):
@@ -146,3 +152,18 @@ def test_dominio_que_no_resuelve_se_detiene(monkeypatch):
     result = orch.run_scan("nope.invalid", paralelo=False)
     assert result.ip is None
     assert len(result.findings) == 1  # solo el finding de recon
+
+
+def test_run_scan_dos_fases_emite_parcial(monkeypatch):
+    """Fase 1 emite un informe parcial con las herramientas lentas 'en progreso';
+    la fase 2 (nuclei/testssl/…) las completa en el resultado final."""
+    _patch_todo(monkeypatch)
+    parciales = []
+    result = orch.run_scan(
+        "ej.com", paralelo=False, on_parcial=lambda r: parciales.append(dict(r.estado_modulos))
+    )
+    assert len(parciales) == 1  # se emitió exactamente un informe parcial
+    en_progreso = [lbl for lbl, v in parciales[0].items() if "en progreso" in v]
+    assert en_progreso  # las lentas aparecen en progreso en el parcial
+    # en el resultado final NINGUNA queda "en progreso"
+    assert not any("en progreso" in v for v in result.estado_modulos.values())

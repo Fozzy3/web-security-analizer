@@ -8,7 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
-from webvulnscanner import __version__, baseline, diff, informe, pdf, sarif, sbom
+from webvulnscanner import __version__, baseline, diff, informe, pdf, sarif, sbom, tools
 from webvulnscanner.models import Risk
 from webvulnscanner.net import Sesion
 from webvulnscanner.orchestrator import MODULOS, MODULOS_ACTIVOS, run_scan
@@ -55,12 +55,6 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--pdf", action="store_true", help="además, exportar el reporte HTML a PDF (requiere extra 'pdf')"
     )
     p.add_argument(
-        "--authorized",
-        action="store_true",
-        help="habilita módulos ACTIVOS (cookies, CORS, XSS/SQLi, fuzzing). "
-        "SOLO en objetivos propios o con autorización expresa.",
-    )
-    p.add_argument(
         "--rl-burst",
         type=int,
         default=12,
@@ -70,6 +64,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--no-save", action="store_true", help="no escribir archivos, solo consola")
     p.add_argument("--no-parallel", action="store_true", help="ejecutar módulos en secuencia")
     p.add_argument("-q", "--quiet", action="store_true", help="silenciar el log de progreso")
+    p.add_argument(
+        "--check-tools",
+        action="store_true",
+        help="listar los motores externos (nuclei, nmap, wpscan…), su estado y cómo instalarlos, y salir",
+    )
     p.add_argument("--version", action="version", version=f"WebVulnScanner {__version__}")
 
     # Sesión: credenciales para escanear zonas autenticadas + cortesía (throttle).
@@ -100,8 +99,8 @@ def _construir_sesion(args: argparse.Namespace) -> Sesion:
     return Sesion(headers=headers, delay=delay)
 
 
-def _resolver_activos(profile: str | None, only: str | None, skip: str | None, autorizado: bool) -> set[str]:
-    base = set(_MODULOS_VALIDOS) | (set(_MODULOS_ACTIVOS) if autorizado else set())
+def _resolver_activos(profile: str | None, only: str | None, skip: str | None) -> set[str]:
+    base = set(_MODULOS_VALIDOS) | set(_MODULOS_ACTIVOS)  # siempre todo (pasivos + activos)
     seleccion = _PERFILES[profile] if profile else None
     activos = set(seleccion) if seleccion is not None else set(base)
     if only:
@@ -114,6 +113,20 @@ def _resolver_activos(profile: str | None, only: str | None, skip: str | None, a
     return activos
 
 
+def _imprimir_motores() -> None:
+    """Doctor: estado de cada motor externo opcional y cómo instalarlo (para agentes)."""
+    print("\nMotores externos (opcionales) — la herramienta los usa automáticamente si están instalados:\n")
+    for _clave, (etq, chk, cmd) in tools.MOTORES.items():
+        if chk():
+            print(f"  [✓ instalado] {etq}")
+        else:
+            print(f"  [✗ falta    ] {etq}\n                 instalar: {cmd}")
+    print(
+        "\n  Shodan: consulta gratis vía InternetDB (sin API key). "
+        "Con SHODAN_API_KEY usa además la Host API (datos más ricos)."
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
 
@@ -122,6 +135,10 @@ def main(argv: list[str] | None = None) -> int:
         format="%(message)s",
         stream=sys.stdout,
     )
+
+    if args.check_tools:
+        _imprimir_motores()
+        return 0
 
     # Solo se pregunta en modo interactivo: en un pipe o en CI, input() colgaría
     # el proceso o reventaría con EOFError en vez de dar un error legible.
@@ -132,22 +149,30 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: debe indicar un dominio.", file=sys.stderr)
         return 1
 
-    activos = _resolver_activos(args.profile, args.only, args.skip, args.authorized)
+    activos = _resolver_activos(args.profile, args.only, args.skip)
 
     print("\n" + "=" * 60)
     print("  WebVulnScanner 2.0 — Auditoría de seguridad web")
-    if args.authorized:
-        print("  ⚠ MODO ACTIVO — solo para objetivos autorizados")
+    print("  ⚠ ESCANEO ACTIVO COMPLETO — solo sobre objetivos propios o autorizados")
     print("=" * 60)
+
+    def _informe_parcial(parcial: object) -> None:
+        # 1ª fase: emite el informe ya (con las herramientas lentas "en progreso");
+        # el auto-refresh del HTML lo actualizará cuando termine la 2ª fase.
+        if args.no_save:
+            return
+        ruta = Path(args.output) / "informe.html"
+        ruta.write_text(informe.generar(parcial), encoding="utf-8")  # type: ignore[arg-type]
+        print(f"  📄 Informe parcial listo (análisis profundo en curso): {ruta}")
 
     try:
         result = run_scan(
             dominio,
             activos=activos,
             paralelo=not args.no_parallel,
-            autorizado=args.authorized,
             sesion=_construir_sesion(args),
             rl_burst=args.rl_burst,
+            on_parcial=_informe_parcial,
         )
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -169,6 +194,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  Baseline aplicado ({ruta_baseline}): {antes - len(result.findings)} suprimidos")
 
     print("\n" + render_texto(result))
+
+    faltantes = tools.motores_faltantes()
+    if faltantes:
+        print("\n  ⚙ Motores externos no instalados (instalalos para cobertura completa):")
+        for etq, cmd in faltantes:
+            print(f"    • {etq:14} → {cmd}")
+        print("    (ver 'webvulnscanner --check-tools')")
 
     if args.diff:
         anterior = diff.cargar_reporte(args.diff)

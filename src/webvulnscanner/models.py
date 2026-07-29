@@ -97,6 +97,7 @@ class ScanResult:
     ip: str | None = None
     servidor: str | None = None
     findings: list[Finding] = field(default_factory=list)
+    estado_modulos: dict[str, str] = field(default_factory=dict)  # módulo → "analizado"|"omitido …"|"falló"
 
     def por_riesgo(self) -> dict[Risk, list[Finding]]:
         agrupado: dict[Risk, list[Finding]] = {r: [] for r in Risk}
@@ -116,4 +117,5 @@ class ScanResult:
             ip=meta.get("ip"),
             servidor=meta.get("servidor"),
             findings=[Finding.from_dict(h) for h in payload.get("hallazgos", [])],
+            estado_modulos=payload.get("estado_modulos", {}),
         )

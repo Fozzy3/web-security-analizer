@@ -41,42 +41,41 @@ def fake_scan(monkeypatch):
 # ── resolución de módulos ────────────────────────────────────
 
 
-def test_sin_perfil_solo_pasivos():
-    activos = cli._resolver_activos(None, None, None, autorizado=False)
+def test_sin_perfil_incluye_todo():
+    """Sin gate: por defecto corre TODO (pasivos + activos)."""
+    activos = cli._resolver_activos(None, None, None)
     assert "recon" in activos
-    assert "fuzzing" not in activos
+    assert "fuzzing" in activos  # activo: ahora siempre incluido
 
 
-def test_perfil_full_con_authorized_incluye_activos():
-    """Regresión: 'full' como set fijo dejaba fuera los módulos activos."""
-    activos = cli._resolver_activos("full", None, None, autorizado=True)
+def test_perfil_full_incluye_activos():
+    activos = cli._resolver_activos("full", None, None)
     assert {"fuzzing", "cookies", "nuclei"} <= activos
-    assert activos == cli._resolver_activos(None, None, None, autorizado=True)
+    assert activos == cli._resolver_activos(None, None, None)
 
 
 def test_perfil_quick_es_subconjunto():
-    activos = cli._resolver_activos("quick", None, None, autorizado=False)
+    activos = cli._resolver_activos("quick", None, None)
     assert activos == {"recon", "tls", "headers", "waf", "fingerprint"}
 
 
 def test_only_gana_sobre_perfil():
-    assert cli._resolver_activos("quick", "tls,dns", None, autorizado=False) == {"tls", "dns"}
+    assert cli._resolver_activos("quick", "tls,dns", None) == {"tls", "dns"}
 
 
 def test_skip_resta():
-    activos = cli._resolver_activos("quick", None, "tls,waf", autorizado=False)
+    activos = cli._resolver_activos("quick", None, "tls,waf")
     assert activos == {"recon", "headers", "fingerprint"}
 
 
 def test_modulo_desconocido_falla():
     with pytest.raises(SystemExit):
-        cli._resolver_activos(None, "noexiste", None, autorizado=False)
+        cli._resolver_activos(None, "noexiste", None)
 
 
-def test_modulo_activo_sin_authorized_falla():
-    """Pedir fuzzing sin --authorized no debe colarse."""
-    with pytest.raises(SystemExit):
-        cli._resolver_activos(None, "fuzzing", None, autorizado=False)
+def test_only_modulo_activo_permitido():
+    """Sin gate: pedir un módulo activo por --only ya es válido."""
+    assert cli._resolver_activos(None, "fuzzing", None) == {"fuzzing"}
 
 
 # ── main() ───────────────────────────────────────────────────
@@ -124,10 +123,12 @@ def test_sarif_escribe_archivo_valido(tmp_path, fake_scan):
     assert doc["version"] == "2.1.0"
 
 
-def test_authorized_propaga_al_scan(fake_scan):
+def test_scan_incluye_activos_por_defecto(fake_scan):
+    """Sin gate: cada escaneo del CLI incluye los módulos activos."""
     llamadas, _ = fake_scan
-    cli.main(["example.com", "--authorized", "--no-save", "-q"])
-    assert llamadas[0]["autorizado"] is True
+    cli.main(["example.com", "--no-save", "-q"])
+    assert "fuzzing" in llamadas[0]["activos"]
+    assert "autorizado" not in llamadas[0]  # el parámetro ya no existe
 
 
 def test_no_parallel_propaga_al_scan(fake_scan):
@@ -229,13 +230,13 @@ def _patch_rate_limit(monkeypatch) -> dict:
 
 def test_rl_burst_llega_a_rate_limit(monkeypatch):
     capturado = _patch_rate_limit(monkeypatch)
-    cli.main(["example.com", "--authorized", "--only", "rate_limit", "--rl-burst", "5", "--no-save", "-q"])
+    cli.main(["example.com", "--only", "rate_limit", "--rl-burst", "5", "--no-save", "-q"])
     assert capturado["burst"] == 5
 
 
 def test_rl_burst_default_llega_a_rate_limit(monkeypatch):
     capturado = _patch_rate_limit(monkeypatch)
-    cli.main(["example.com", "--authorized", "--only", "rate_limit", "--no-save", "-q"])
+    cli.main(["example.com", "--only", "rate_limit", "--no-save", "-q"])
     assert capturado["burst"] == 12
 
 

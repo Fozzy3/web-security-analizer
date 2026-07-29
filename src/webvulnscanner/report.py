@@ -122,6 +122,7 @@ def render_json(result: ScanResult, *, timestamp: str | None = None) -> str:
             "puntaje": pts,
         },
         "resumen": conteo,
+        "estado_modulos": result.estado_modulos,
         "hallazgos": [h.to_dict() for h in result.findings],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
