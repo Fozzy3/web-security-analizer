@@ -10,7 +10,7 @@ from pathlib import Path
 
 from webvulnscanner import __version__, baseline, diff, informe, sarif, sbom, tools
 from webvulnscanner.models import Risk
-from webvulnscanner.net import Sesion
+from webvulnscanner.net import Sesion, normalizar_dominio
 from webvulnscanner.orchestrator import MODULOS, MODULOS_ACTIVOS, run_scan
 from webvulnscanner.report import guardar, render_texto
 
@@ -41,7 +41,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--only", metavar="MODS", help=f"solo estos módulos (coma). Disponibles: {','.join(_MODULOS_VALIDOS)}"
     )
     p.add_argument("--skip", metavar="MODS", help="omitir estos módulos (coma)")
-    p.add_argument("-o", "--output", default=".", metavar="DIR", help="carpeta de reportes (def: .)")
+    p.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        metavar="DIR",
+        help="carpeta de reportes (por defecto: informes/<dominio>/, autocreada)",
+    )
     p.add_argument("--sarif", action="store_true", help="además, escribir reporte .sarif (CI/GitHub)")
     p.add_argument("--diff", metavar="PREV.json", help="comparar contra un reporte .json anterior")
     p.add_argument(
@@ -146,6 +152,16 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: debe indicar un dominio.", file=sys.stderr)
         return 1
 
+    # Carpeta de salida: por defecto informes/<dominio>/, autocreada por cada URL nueva.
+    try:
+        _dom = normalizar_dominio(dominio)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    carpeta = Path(args.output) if args.output else Path("informes") / _dom
+    if not args.no_save:
+        carpeta.mkdir(parents=True, exist_ok=True)
+
     activos = _resolver_activos(args.profile, args.only, args.skip)
 
     print("\n" + "=" * 60)
@@ -158,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         # el auto-refresh del HTML lo actualizará cuando termine la 2ª fase.
         if args.no_save:
             return
-        ruta = Path(args.output) / "informe.html"
+        ruta = carpeta / "informe.html"
         ruta.write_text(informe.generar(parcial), encoding="utf-8")  # type: ignore[arg-type]
         print(f"  📄 Informe parcial listo (análisis profundo en curso): {ruta}")
 
@@ -204,11 +220,11 @@ def main(argv: list[str] | None = None) -> int:
         print("\n" + diff.render_texto(diff.comparar(anterior, result)))
 
     if not args.no_save:
-        txt, js, htm = guardar(result, args.output)
+        txt, js, htm = guardar(result, carpeta)
         # Informe curado de 3 pestañas, generado automáticamente desde el escaneo.
-        ruta_informe = Path(args.output) / "informe.html"
+        ruta_informe = carpeta / "informe.html"
         ruta_informe.write_text(informe.generar(result), encoding="utf-8")
-        print(f"  Reportes guardados:\n  → {ruta_informe}\n  → {js}")
+        print(f"  Reportes guardados en {carpeta}/:\n  → {ruta_informe}\n  → {js}")
         if args.sarif:
             ruta_sarif = Path(txt).with_suffix(".sarif")
             ruta_sarif.write_text(sarif.render(result), encoding="utf-8")
