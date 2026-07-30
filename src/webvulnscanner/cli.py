@@ -8,7 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
-from webvulnscanner import __version__, baseline, diff, informe, pdf, sarif, sbom, tools
+from webvulnscanner import __version__, baseline, diff, informe, sarif, sbom, tools
 from webvulnscanner.models import Risk
 from webvulnscanner.net import Sesion
 from webvulnscanner.orchestrator import MODULOS, MODULOS_ACTIVOS, run_scan
@@ -51,9 +51,6 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--write-baseline", metavar="FILE", help="escribir el escaneo actual como baseline aceptado"
     )
     p.add_argument("--sbom", metavar="FILE", help="escribir un SBOM CycloneDX de los componentes detectados")
-    p.add_argument(
-        "--pdf", action="store_true", help="además, exportar el reporte HTML a PDF (requiere extra 'pdf')"
-    )
     p.add_argument(
         "--rl-burst",
         type=int,
@@ -216,12 +213,6 @@ def main(argv: list[str] | None = None) -> int:
             ruta_sarif = Path(txt).with_suffix(".sarif")
             ruta_sarif.write_text(sarif.render(result), encoding="utf-8")
             print(f"  → {ruta_sarif}")
-        if args.pdf:
-            ruta_pdf = pdf.html_a_pdf(ruta_informe)  # PDF del informe curado
-            if ruta_pdf:
-                print(f"  → {ruta_pdf}")
-            else:
-                print("  (PDF omitido: instale el extra 'pdf' — pip install '.[pdf]')", file=sys.stderr)
 
     # Código de salida distinto de 0 si hay hallazgos de riesgo alto.
     return 2 if result.conteo()[Risk.ALTO] else 0

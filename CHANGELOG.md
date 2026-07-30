@@ -7,7 +7,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 ### Añadido — Informe de 3 pestañas auto-generado (`informe.py`)
 - La herramienta genera **automáticamente** `informe.html` (pestañas 📋 Informe · 🗂️ Inteligencia · 🔍 Qué revisa) desde el resultado del escaneo — ya no se cura a mano.
 - Data-driven: la pestaña "Qué revisa" sale de una tabla única de módulos (fuente de verdad). Tema claro/oscuro, responsive, CSS puro, HTML escapado.
-- El CLI escribe `informe.html` en cada escaneo; `--pdf` lo exporta a PDF.
+- El CLI escribe `informe.html` en cada escaneo.
 
 ### Añadido — Laboratorio de red: canal encubierto en IP ID (subpaquete `covert`, capa 3/4)
 - Nuevo CLI **`webvulnscanner-covert`** (demo/send/recv/detect/mitigate) para el Taller de Redes.
@@ -16,11 +16,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 - **Mitigación**: `mitigador.py` aleatoriza el IP ID (`normalizar` puro + gateway NFQUEUE inline).
 - Capas de red con scapy/netfilterqueue (extra `netlab`), degradación elegante. Núcleo puro con tests. Ver `covert/README.md`.
 
-### Añadido — Motores externos opcionales (extras `enhanced`/`pdf`/`apifuzz`)
+### Añadido — Motores externos opcionales (extras `enhanced`/`apifuzz`)
 - **sslyze** (`tls_deep`): análisis TLS profundo — Heartbleed, ROBOT, CCS-injection, protocolos obsoletos.
 - **Wappalyzer** (`stack`): fingerprint de cientos de tecnologías con versión + **correlación CVE por componente** (NVD, no solo el servidor). Dedup de CVEs repetidos.
 - **detect-secrets**: booster de secretos por entropía en el módulo `secrets`.
-- **weasyprint** (`pdf`): export del reporte HTML a PDF (`--pdf`).
 - **schemathesis** (`api_fuzz`, activo): fuzzing de API contra su OpenAPI — detecta errores 5xx no manejados, respuestas fuera de contrato y códigos no documentados. Wrapper del CLI (invocado desde el venv), reporte JUnit parseado. Se auto-gatea: solo corre si hay OpenAPI expuesto.
 - **PyJWT / nvdlib**: disponibles como extra para robustez.
 - Todos con **degradación elegante**: si la librería no está instalada, el módulo se omite.

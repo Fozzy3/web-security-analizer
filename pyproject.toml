@@ -28,7 +28,6 @@ enhanced = [
     "detect-secrets>=1.5",    # secretos por entropía
     "nvdlib>=0.7",            # correlación CVE multi-componente
 ]
-pdf = ["weasyprint>=60"]      # export del informe a PDF
 apifuzz = ["schemathesis>=3"] # fuzzing de API contra su OpenAPI
 # Laboratorio de red (capa 3/4): canal encubierto en IP ID (académico).
 netlab = ["scapy>=2.5", "scikit-learn>=1.3", "numpy>=1.24"]  # + netfilterqueue (necesita libnetfilter-queue-dev)
