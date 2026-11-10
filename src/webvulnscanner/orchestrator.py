@@ -32,6 +32,7 @@ from webvulnscanner.modules import (
     headers,
     jwt_audit,
     mail_transport,
+    openvas,
     ports,
     rate_limit,
     recon,
@@ -97,11 +98,14 @@ MODULOS_ACTIVOS = [
     ("nuclei", "nuclei (plantillas, externo)"),
     ("nmap", "nmap --script vuln (externo)"),
     ("wpscan", "WPScan (externo)"),
+    ("openvas", "OpenVAS / Greenbone (GVM, externo)"),
 ]
 
 # Módulos LENTOS (motores externos + fuzzing de API): corren en una 2ª fase para
 # que el informe salga ya con lo rápido y se actualice cuando estos terminen.
-_MODULOS_LENTOS = frozenset({"tls_deep", "subfinder", "testssl", "nuclei", "nmap", "wpscan", "api_fuzz"})
+_MODULOS_LENTOS = frozenset(
+    {"tls_deep", "subfinder", "testssl", "nuclei", "nmap", "wpscan", "api_fuzz", "openvas"}
+)
 
 
 def _ejecutar(nombre: str, fn) -> list[Finding]:
@@ -214,6 +218,7 @@ def run_scan(
             "nuclei": lambda: external.nuclei(dominio),
             "nmap": lambda: external.nmap(info["ip"]),
             "wpscan": lambda: external.wpscan(dominio),
+            "openvas": lambda: openvas.analizar(dominio),
         }
     )
     orden = list(MODULOS) + MODULOS_ACTIVOS
@@ -271,6 +276,7 @@ _MOTOR_DE_MODULO: dict[str, str] = {
     "nuclei": "nuclei",
     "nmap": "nmap",
     "wpscan": "wpscan",
+    "openvas": "openvas",
 }
 
 

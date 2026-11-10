@@ -9,11 +9,15 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+import os
 import shutil
 import subprocess
 from collections.abc import Callable
 
 log = logging.getLogger("webvulnscanner.tools")
+
+# Rutas candidatas del socket GMP de gvmd (sobreescribibles con $GVM_SOCKET).
+_GVM_SOCKETS = ("/run/gvmd/gvmd.sock", "/var/run/gvmd/gvmd.sock")
 
 
 def disponible(binario: str) -> bool:
@@ -22,6 +26,17 @@ def disponible(binario: str) -> bool:
 
 def _importable(paquete: str) -> bool:
     return importlib.util.find_spec(paquete) is not None
+
+
+def gvm_socket() -> str | None:
+    """Ruta del socket GMP de gvmd si existe, o None. $GVM_SOCKET tiene prioridad."""
+    entorno = os.environ.get("GVM_SOCKET")
+    candidatos = [entorno] if entorno else list(_GVM_SOCKETS)
+    return next((c for c in candidatos if c and os.path.exists(c)), None)
+
+
+def _openvas_disponible() -> bool:
+    return _importable("gvm") and gvm_socket() is not None
 
 
 # Motor externo opcional → (etiqueta, ¿disponible?, comando de instalación).
@@ -48,6 +63,12 @@ MOTORES: dict[str, tuple[str, Callable[[], bool], str]] = {
     ),
     "nmap": ("nmap", lambda: disponible("nmap"), "sudo dnf install -y nmap   # o: sudo apt install -y nmap"),
     "wpscan": ("wpscan", lambda: disponible("wpscan"), "sudo gem install wpscan   # requiere Ruby"),
+    "openvas": (
+        "OpenVAS/GVM",
+        _openvas_disponible,
+        "pip install python-gvm  +  instancia GVM (Greenbone) con socket en /run/gvmd/gvmd.sock "
+        "y credenciales en $GVM_USERNAME/$GVM_PASSWORD",
+    ),
 }
 
 
