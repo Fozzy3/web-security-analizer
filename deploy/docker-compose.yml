@@ -1,0 +1,41 @@
+# Overlay de WebVulnScanner sobre la pila Greenbone Community.
+#
+# NO define Greenbone: se ejecuta JUNTO al compose oficial de Greenbone, que se
+# baja con `setup.sh`. Al combinarse ambos en el mismo proyecto de Compose, este
+# servicio comparte el volumen del socket GMP (`gvmd_socket_vol`) que crea
+# Greenbone, y así habla con gvmd sin exponer nada por red.
+#
+# Uso (lo hace setup.sh por vos):
+#   docker compose -f greenbone.yml -f docker-compose.yml up -d --build
+
+services:
+  webvulnscanner:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: webvulnscanner:2.0
+    # entrypoint, no command: la imagen tiene ENTRYPOINT webvulnscanner y un
+    # `command` se le agregaría como argumentos (la web nunca arrancaba).
+    entrypoint: ["uvicorn", "webvulnscanner.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      # El socket GMP lo publica gvmd en este volumen compartido:
+      GVM_SOCKET: /run/gvmd/gvmd.sock
+      GVM_USERNAME: admin
+      # Debe COINCIDIR con la contraseña del usuario admin creado en gvmd
+      # (ver setup.sh). Cambiala por una fuerte antes de exponer el servicio.
+      GVM_PASSWORD: ${GVM_PASSWORD:-admin}
+      # Tope de espera por escaneo OpenVAS (s). Un scan serio tarda 10-40 min.
+      GVM_MAX_WAIT: ${GVM_MAX_WAIT:-3600}
+    volumes:
+      - gvmd_socket_vol:/run/gvmd   # socket GMP compartido con gvmd
+      - ./reports:/reports          # informes generados
+    depends_on:
+      - gvmd
+    restart: unless-stopped
+
+# Volumen creado por el compose de Greenbone; se referencia por nombre para
+# compartir el socket. Al combinar ambos ficheros, Compose lo resuelve al mismo.
+volumes:
+  gvmd_socket_vol:

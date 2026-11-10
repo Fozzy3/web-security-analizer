@@ -1,0 +1,38 @@
+# Web Security Analyzer en el server compartido (convención de server-edge):
+# código en /opt/wsa, se engancha a la red `edge` y Traefik lo publica con TLS.
+# Sin OpenVAS: ese módulo se omite solo. Sin `ports:`.
+#
+#   cd /opt/wsa && docker compose -f docker-compose.prod.yml up -d --build
+name: wsa
+
+services:
+  wsa:
+    # La imagen la arma desplegar.sh en local y la sube (los motores externos hacen
+    # el build pesado; no conviene compilarlo en el server compartido).
+    image: webvulnscanner:2.0
+    # La imagen arranca el CLI por defecto; acá va la web.
+    entrypoint: ["uvicorn", "webvulnscanner.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    networks: [edge]
+    deploy:
+      resources:
+        # 1 GB: nuclei/sslyze/testssl pueden picar durante un escaneo activo.
+        limits: { cpus: "1.5", memory: 1024M }
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wsa.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.wsa.entrypoints=websecure"
+      - "traefik.http.routers.wsa.tls.certresolver=le"
+      - "traefik.http.services.wsa.loadbalancer.server.port=8000"
+      # Contraseña obligatoria: la API corre escaneos ACTIVOS contra lo que se pegue,
+      # y un reporte de abuso a Hetzner bloquea el server entero (con los demás proyectos).
+      - "traefik.http.middlewares.wsa-auth.basicauth.users=${DEMO_AUTH}"
+      - "traefik.http.routers.wsa.middlewares=wsa-auth,secure-headers@file"
+
+networks:
+  edge:
+    name: edge
+    external: true   # la gobierna /opt/edge

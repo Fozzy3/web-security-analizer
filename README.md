@@ -88,9 +88,27 @@ curl -X POST localhost:8000/scan -H 'Content-Type: application/json' \
      -d '{"dominio": "example.com", "activos": ["recon","tls","headers"]}'
 ```
 
-El modo activo **no** se expone por HTTP a propósito (la autorización es por objetivo).
+`POST /scan` corre síncrono y devuelve el reporte en JSON (útil para automatizar).
 
-### Docker
+### Web — "pegá la URL y arranca"
+
+El mismo servidor expone una página en `/`: pegás una URL, se lanza el escaneo
+completo en segundo plano y te redirige a un informe que **se actualiza solo**
+(el escaneo profundo con OpenVAS tarda 10-40 min).
+
+```bash
+uvicorn webvulnscanner.api:app --host 0.0.0.0 --port 8000
+# abrí http://localhost:8000
+```
+
+Endpoints web: `POST /ui/scan` (`{"dominio": "..."}` → `{job_id, url}`) y
+`GET /ui/report/{job_id}` (informe HTML, con auto-refresh mientras corre).
+
+> ⚠️ La web corre módulos **activos** contra el objetivo que se pegue. Un `/`
+> abierto a internet = escaneo-como-servicio para terceros (abuso). Exponelo solo
+> en red confiable o detrás de auth/allowlist de dominios propios.
+
+### Docker (CLI)
 
 ```bash
 make docker                                 # construye webvulnscanner:2.0
@@ -99,6 +117,26 @@ docker run --rm -v "$PWD/reportes:/reports" webvulnscanner:2.0 example.com
 
 > En entornos con DNS restringido en el build (algunos sandboxes/CI), use
 > `docker build --network=host -t webvulnscanner:2.0 .`
+
+### Despliegue todo-en-uno con OpenVAS (docker-compose)
+
+Para que OpenVAS corra **con todas sus NVTs**, hace falta la pila Greenbone
+completa (gvmd + ospd-openvas + PostgreSQL + Redis + feed). El script la baja y
+la levanta junto a la web, compartiendo el socket GMP:
+
+```bash
+GVM_PASSWORD='una-clave-fuerte' ./deploy/setup.sh
+# → web en http://localhost:8000
+```
+
+Requisitos: Docker + `docker compose` v2, ~4 GB RAM, ~10 GB disco.
+
+> ⏳ **Primer arranque:** Greenbone sincroniza el feed de NVTs durante **horas**.
+> Hasta que termine, el módulo OpenVAS no da resultados (el resto del escáner
+> funciona igual). Seguí el avance con `docker compose ... logs -f gvmd`.
+
+Sin esta pila, el módulo OpenVAS se auto-omite (como cualquier motor externo
+ausente); comprobá qué falta con `webvulnscanner --check-tools`.
 
 ---
 
