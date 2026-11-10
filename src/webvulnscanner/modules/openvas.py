@@ -167,7 +167,9 @@ def _ejecutar_scan(objetivo: str) -> str | None:
         gmp.authenticate(usuario, clave)
         try:
             nombre = f"wvs-{objetivo}"
-            target_id = _elem(gmp.create_target(name=nombre, hosts=[objetivo], port_list_id=portlist)).get("id")
+            target_id = _elem(gmp.create_target(name=nombre, hosts=[objetivo], port_list_id=portlist)).get(
+                "id"
+            )
             task_id = _elem(
                 gmp.create_task(name=nombre, config_id=config, target_id=target_id, scanner_id=scanner)
             ).get("id")

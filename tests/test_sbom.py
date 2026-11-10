@@ -34,9 +34,7 @@ def test_sbom_incluye_cve_conocido_del_componente():
     assert ref  # el componente tiene un bom-ref referenciable
     vulns = doc.get("vulnerabilities", [])
     assert any(
-        v["id"] == "CVE-2021-23017"
-        and "source" in v
-        and any(a["ref"] == ref for a in v["affects"])
+        v["id"] == "CVE-2021-23017" and "source" in v and any(a["ref"] == ref for a in v["affects"])
         for v in vulns
     )
 

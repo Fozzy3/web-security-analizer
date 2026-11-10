@@ -48,7 +48,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "propio sitio los anuncia. Conocer la versión exacta permite buscar fallos publicados de ese "
         "software; exponerla de más le ahorra trabajo a un atacante.",
         "Cabecera Server, DNS · A02:2025.",
-        False, "Reconocimiento y red",
+        False,
+        "Reconocimiento y red",
     ),
     (
         "Puertos + banners",
@@ -57,7 +58,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "cada uno (correo, base de datos, administración remota…). Cada puerto abierto de más es una "
         "puerta extra; los de administración expuestos a internet son especialmente peligrosos.",
         "Puertos TCP de riesgo.",
-        False, "Reconocimiento y red",
+        False,
+        "Reconocimiento y red",
     ),
     (
         "WAF / CDN",
@@ -66,7 +68,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "servidor de origen. Si no hay ninguno, el servidor real queda directamente expuesto a ataques y "
         "a caídas por saturación.",
         "Firmas conocidas.",
-        False, "Reconocimiento y red",
+        False,
+        "Reconocimiento y red",
     ),
     (
         "Subdominios (CT)",
@@ -76,7 +79,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "(subdomain takeover). Un subdominio huérfano puede ser secuestrado para alojar contenido "
         "malicioso bajo tu marca.",
         "crt.sh · A01:2025.",
-        False, "Reconocimiento y red",
+        False,
+        "Reconocimiento y red",
     ),
     (
         "Subdominios (subfinder)",
@@ -85,7 +89,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "públicas (mucho más que Certificate Transparency por sí solo). Cada subdominio encontrado es una "
         "superficie de ataque adicional que conviene revisar.",
         "subfinder (motor externo). Opcional.",
-        False, "Reconocimiento y red",
+        False,
+        "Reconocimiento y red",
     ),
     (
         "Shodan",
@@ -95,7 +100,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "banners y vulnerabilidades observadas. Da una vista externa sin tocar el objetivo. Requiere una "
         "clave de API de Shodan.",
         "Shodan API · A02:2025. Opcional.",
-        False, "Reconocimiento y red",
+        False,
+        "Reconocimiento y red",
     ),
     # ── Pasivos · Cifrado y correo ──────────────────────────────────────────
     (
@@ -105,7 +111,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "obliga a usar HTTPS. Un cifrado viejo o un certificado por vencer permiten espiar o suplantar la "
         "conexión entre el usuario y el sitio.",
         "SSL Labs / PCI-DSS / RFC 8446 · A04:2025.",
-        False, "Cifrado y correo",
+        False,
+        "Cifrado y correo",
     ),
     (
         "TLS profundo (sslyze)",
@@ -114,7 +121,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "CCS-injection, y detecta protocolos obsoletos que ya no son seguros. Estas fallas pueden permitir "
         "descifrar el tráfico o robar datos de la conexión.",
         "sslyze · A02:2025. Corre solo si sslyze está instalado.",
-        False, "Cifrado y correo",
+        False,
+        "Cifrado y correo",
     ),
     (
         "TLS profundo (testssl)",
@@ -123,7 +131,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "protocolos y suites soportadas, vulnerabilidades conocidas (Heartbleed, ROBOT, BEAST…), calidad "
         "del certificado y más. Complementa el análisis TLS propio con un motor especializado.",
         "testssl.sh (motor externo) · A04:2025. Opcional.",
-        False, "Cifrado y correo",
+        False,
+        "Cifrado y correo",
     ),
     (
         "DNS y correo",
@@ -132,7 +141,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "de zona (AXFR). Sin SPF/DMARC/DKIM cualquiera puede enviar correos falsos en nombre del dominio "
         "(phishing); una transferencia de zona abierta filtra el mapa completo de la infraestructura.",
         "RFC 7208/7489/6376/8659.",
-        False, "Cifrado y correo",
+        False,
+        "Cifrado y correo",
     ),
     (
         "Correo (MTA-STS / TLS-RPT)",
@@ -141,7 +151,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "reportes de fallos (TLS-RPT). Sin esto, los correos pueden ser interceptados o forzados a viajar "
         "sin cifrar.",
         "RFC 8461 / 8460.",
-        False, "Cifrado y correo",
+        False,
+        "Cifrado y correo",
     ),
     # ── Pasivos · Configuración y exposición ────────────────────────────────
     (
@@ -151,7 +162,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "Su ausencia deja el sitio expuesto a inyección de scripts (XSS), robo de sesión o a que lo "
         "incrusten en una web falsa (clickjacking).",
         "OWASP Secure Headers · A02:2025.",
-        False, "Configuración y exposición",
+        False,
+        "Configuración y exposición",
     ),
     (
         "Exposición",
@@ -160,7 +172,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "copias de seguridad, robots.txt y security.txt. Un .env o un .git expuesto puede regalar "
         "credenciales y el código fuente completo del sitio.",
         "RFC 9116 · A02:2025.",
-        False, "Configuración y exposición",
+        False,
+        "Configuración y exposición",
     ),
     (
         "Contenido mixto / SRI / formularios",
@@ -169,7 +182,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "sin verificación de integridad (SRI) y formularios que envían datos de forma insegura. Cualquiera "
         "de estos permite que un tercero altere o intercepte lo que ve o envía el usuario.",
         "W3C SRI · A02/A08:2025.",
-        False, "Configuración y exposición",
+        False,
+        "Configuración y exposición",
     ),
     (
         "CSRF (pasivo)",
@@ -178,7 +192,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "sitio malicioso puede hacer que la víctima, ya logueada, envíe acciones sin querer (cambiar su "
         "correo, transferir dinero, etc.).",
         "OWASP A01:2025 · CWE-352.",
-        False, "Configuración y exposición",
+        False,
+        "Configuración y exposición",
     ),
     # ── Pasivos · Componentes y dependencias ────────────────────────────────
     (
@@ -188,7 +203,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "HTML, las cabeceras y pistas del código. Conocer la tecnología y su versión es el primer paso "
         "para buscar vulnerabilidades específicas de ella.",
         "HTML/headers/meta generator · A03:2025.",
-        False, "Componentes y dependencias",
+        False,
+        "Componentes y dependencias",
     ),
     (
         "Stack (Wappalyzer)",
@@ -197,7 +213,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "vulnerabilidades (NVD) para listar los CVEs conocidos de cada componente. Así se ven fallos no "
         "solo del servidor, sino de cada librería que el sitio usa.",
         "Wappalyzer → NVD · A03:2025. Corre solo si está instalado.",
-        False, "Componentes y dependencias",
+        False,
+        "Componentes y dependencias",
     ),
     (
         "Librerías JS (retire.js)",
@@ -206,7 +223,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "vulnerables conocidas. Una librería desactualizada arrastra fallos ya públicos que un atacante "
         "puede explotar directamente en el navegador.",
         "Base retire.js · A03:2025.",
-        False, "Componentes y dependencias",
+        False,
+        "Componentes y dependencias",
     ),
     (
         "Supply chain / SBOM",
@@ -215,7 +233,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "dependencias con nombres que parecen internos y podrían ser suplantadas (dependency confusion). "
         "Sirve para saber exactamente qué se usa y detectar riesgos en la cadena de suministro.",
         "CycloneDX 1.5 · A03:2025.",
-        False, "Componentes y dependencias",
+        False,
+        "Componentes y dependencias",
     ),
     (
         "CVE (NVD) + por componente",
@@ -224,7 +243,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "(NVD) y prioriza los CVEs según su probabilidad de ser explotados (EPSS) y si ya se explotan en "
         "el mundo real (lista CISA KEV). Así se atiende primero lo que de verdad es peligroso.",
         "NVD + EPSS + CISA KEV · A03:2025.",
-        False, "Componentes y dependencias",
+        False,
+        "Componentes y dependencias",
     ),
     # ── Pasivos · Aplicación y datos sensibles ──────────────────────────────
     (
@@ -234,7 +254,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "interna), xmlrpc (usado para fuerza bruta y amplificación), el archivo readme (revela la versión) "
         "y la página de login. Estas fugas ayudan a enumerar cuentas y a planear el ataque.",
         "Endpoints WordPress · A07/A05:2025.",
-        False, "Aplicación y datos sensibles",
+        False,
+        "Aplicación y datos sensibles",
     ),
     (
         "Frameworks / CMS (dirigido)",
@@ -243,7 +264,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "como phpMyAdmin, y endpoints de Drupal o Joomla. Un panel de administración o un depurador "
         "accesible puede entregar el control del sitio o de la base de datos.",
         "Endpoints por stack · A02/A05:2025.",
-        False, "Aplicación y datos sensibles",
+        False,
+        "Aplicación y datos sensibles",
     ),
     (
         "Secretos",
@@ -252,7 +274,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "patrones conocidos y medición de aleatoriedad (entropía). Una clave filtrada puede dar acceso "
         "directo a servicios de pago, de nube o a bases de datos.",
         "Regex + detect-secrets · A04:2025.",
-        False, "Aplicación y datos sensibles",
+        False,
+        "Aplicación y datos sensibles",
     ),
     (
         "JWT",
@@ -261,7 +284,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "algoritmo 'none' (sin firma), secreto débil de HS256 o falta de caducidad. Estos fallos permiten "
         "falsificar un token y hacerse pasar por cualquier usuario.",
         "RFC 7519 · A07:2025.",
-        False, "Aplicación y datos sensibles",
+        False,
+        "Aplicación y datos sensibles",
     ),
     (
         "Superficie de API",
@@ -270,7 +294,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "revela todos los endpoints, parámetros y datos internos, entregándole a un atacante el mapa "
         "completo de la API.",
         "OWASP API Top 10 · API9:2023.",
-        False, "Aplicación y datos sensibles",
+        False,
+        "Aplicación y datos sensibles",
     ),
     (
         "Cloud",
@@ -279,7 +304,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "de metadata de la nube. Un bucket abierto puede exponer archivos privados; el acceso a metadata "
         "puede filtrar credenciales del servidor.",
         "A02:2025 / A01 (SSRF).",
-        False, "Aplicación y datos sensibles",
+        False,
+        "Aplicación y datos sensibles",
     ),
     # ── Activos · Sesión y navegador ────────────────────────────────────────
     (
@@ -289,7 +315,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "accesibles por scripts) y SameSite (no se envían desde otros sitios). Sin ellos, una cookie de "
         "sesión puede ser robada o usada en un ataque CSRF.",
         "RFC 6265 · A02:2025.",
-        True, "Sesión y navegador",
+        True,
+        "Sesión y navegador",
     ),
     (
         "CORS",
@@ -298,7 +325,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "refleja el origen sin validarlo. Una configuración abierta permite que una web maliciosa robe "
         "datos privados del usuario mientras está logueado.",
         "A02:2025 · CWE-942.",
-        True, "Sesión y navegador",
+        True,
+        "Sesión y navegador",
     ),
     # ── Activos · Inyección y descubrimiento ────────────────────────────────
     (
@@ -309,7 +337,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "plantillas (SSTI) y comandos del sistema. Son de los fallos más graves: pueden robar datos, "
         "sesiones o tomar el control del servidor.",
         "A05:2025 · CWE-79/89/22/78/93.",
-        True, "Inyección y descubrimiento",
+        True,
+        "Inyección y descubrimiento",
     ),
     (
         "Open redirect",
@@ -318,7 +347,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "atacante. Se usa en phishing: el enlace parece legítimo (tu dominio) pero termina en una web "
         "falsa.",
         "A01:2025 · CWE-601.",
-        True, "Inyección y descubrimiento",
+        True,
+        "Inyección y descubrimiento",
     ),
     (
         "Fuzzing de rutas",
@@ -327,7 +357,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         ".git, configuraciones) para encontrar recursos que existen pero no están enlazados. Un archivo o "
         "panel oculto puede exponer datos o funciones sin protección.",
         "A02:2025 · CWE-538.",
-        True, "Inyección y descubrimiento",
+        True,
+        "Inyección y descubrimiento",
     ),
     (
         "SSRF / Host header",
@@ -336,7 +367,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "la nube) y si respeta una cabecera Host falsificada. Un SSRF puede filtrar credenciales internas "
         "o alcanzar sistemas que no están expuestos a internet.",
         "A01:2025 · API7 · CWE-918.",
-        True, "Inyección y descubrimiento",
+        True,
+        "Inyección y descubrimiento",
     ),
     # ── Activos · Acceso y autenticación ────────────────────────────────────
     (
@@ -346,7 +378,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "entrar a paneles de administración sin estar logueado (forced browsing). Es el fallo n.º 1 de "
         "OWASP: permite ver o modificar información que no te corresponde.",
         "A01:2025 · API1/3/5.",
-        True, "Acceso y autenticación",
+        True,
+        "Acceso y autenticación",
     ),
     (
         "Autenticación",
@@ -355,7 +388,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "defecto, si no limita los intentos (fuerza bruta) y si la sesión no se renueva tras entrar "
         "(session fixation). Estas fallas facilitan tomar cuentas ajenas.",
         "A07:2025 · API2.",
-        True, "Acceso y autenticación",
+        True,
+        "Acceso y autenticación",
     ),
     # ── Activos · Abuso de recursos ─────────────────────────────────────────
     (
@@ -365,7 +399,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "en modo depuración en producción. Esos mensajes revelan rutas internas, versiones y a veces "
         "credenciales, útiles para preparar un ataque.",
         "A10:2025 (categoría nueva).",
-        True, "Abuso de recursos",
+        True,
+        "Abuso de recursos",
     ),
     (
         "Rate limiting",
@@ -374,7 +409,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "atacante puede abusar por fuerza bruta, saturar recursos o disparar costos (consumo no "
         "restringido de recursos).",
         "OWASP API4:2023.",
-        True, "Abuso de recursos",
+        True,
+        "Abuso de recursos",
     ),
     (
         "Fuzzing de API (schemathesis)",
@@ -383,7 +419,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "servidor (500) y respuestas que no cumplen su propio contrato. Esas grietas suelen esconder "
         "fallos de validación explotables.",
         "schemathesis · A08:2025. Corre solo si está instalado.",
-        True, "Abuso de recursos",
+        True,
+        "Abuso de recursos",
     ),
     # ── Activos · Motores externos ──────────────────────────────────────────
     (
@@ -393,7 +430,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "comunidad que detectan CVEs, exposiciones, configuraciones inseguras y paneles conocidos. Es uno "
         "de los motores más completos para hallazgos conocidos; corre solo con tu autorización.",
         "nuclei (motor externo). Opcional.",
-        True, "Motores externos",
+        True,
+        "Motores externos",
     ),
     (
         "nmap (scripts vuln)",
@@ -402,7 +440,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "vulnerabilidades (--script vuln) contra los servicios encontrados. Aporta profundidad a nivel de "
         "red y de servicio.",
         "nmap NSE (motor externo). Opcional.",
-        True, "Motores externos",
+        True,
+        "Motores externos",
     ),
     (
         "WPScan",
@@ -411,7 +450,8 @@ _MODULOS_INFO: tuple[tuple[str, str, str, str, bool, str], ...] = (
         "vulnerabilidades de WordPress, sus plugins y temas, y enumerar usuarios. Va mucho más a fondo que "
         "el chequeo propio de WordPress.",
         "WPScan (motor externo). Opcional.",
-        True, "Motores externos",
+        True,
+        "Motores externos",
     ),
 )
 
@@ -724,9 +764,10 @@ def _seccion_cobertura(result: ScanResult) -> str:
     ok = [m for m, s in estado.items() if s == "analizado"]
     no = [(m, s) for m, s in estado.items() if s != "analizado"]
     items_ok = "".join(f"<li>{_e(m)}</li>" for m in ok) or '<li class="cov-none">—</li>'
-    items_no = "".join(
-        f"<li>{_e(m)}<em>{_e(s)}</em></li>" for m, s in no
-    ) or '<li class="cov-none">Todos los módulos ejecutados analizaron el objetivo.</li>'
+    items_no = (
+        "".join(f"<li>{_e(m)}<em>{_e(s)}</em></li>" for m, s in no)
+        or '<li class="cov-none">Todos los módulos ejecutados analizaron el objetivo.</li>'
+    )
     return (
         '<section><h2 class="sec">Cobertura del análisis</h2><div class="panel">'
         f'<p class="mnote" style="margin:0 0 14px">De <b>{len(estado)}</b> módulos ejecutados, '
@@ -758,7 +799,9 @@ def _tab_modulos() -> str:
         # Devuelve (html de sub-grupos, html de chips de índice) para un grupo.
         secciones, chips = [], []
         for cat in cats:
-            items = [(n, rev, det, seg) for n, rev, det, seg, act, c in _MODULOS_INFO if act == activo and c == cat]
+            items = [
+                (n, rev, det, seg) for n, rev, det, seg, act, c in _MODULOS_INFO if act == activo and c == cat
+            ]
             if not items:
                 continue
             sid = _slug(cat)

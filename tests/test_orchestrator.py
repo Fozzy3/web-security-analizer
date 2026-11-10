@@ -47,7 +47,13 @@ def _patch_todo(monkeypatch, ip="1.2.3.4"):
     for fn in ("subfinder", "testssl", "nuclei", "nmap", "wpscan"):
         monkeypatch.setattr(orch.external, fn, lambda *a, **k: [])
     # Módulos ACTIVOS: ahora corren siempre (sin gate) → mockear para no tocar red.
-    for fn in ("analizar_cookies", "analizar_cors", "analizar_inyeccion", "analizar_open_redirect", "analizar_fuzzing"):
+    for fn in (
+        "analizar_cookies",
+        "analizar_cors",
+        "analizar_inyeccion",
+        "analizar_open_redirect",
+        "analizar_fuzzing",
+    ):
         monkeypatch.setattr(orch.active, fn, lambda *a, **k: [])
     for mod in ("access_control", "auth_test", "ssrf", "error_audit", "rate_limit", "api_fuzz"):
         monkeypatch.setattr(getattr(orch, mod), "analizar", lambda *a, **k: [])

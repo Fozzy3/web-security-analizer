@@ -91,7 +91,10 @@ def test_estado_modulos_roundtrip_json():
 def test_informe_muestra_cobertura():
     r = ScanResult(
         "x.com",
-        estado_modulos={"Headers HTTP": "analizado", "nmap (externo)": "omitido — nmap no instalado (instalar: x)"},
+        estado_modulos={
+            "Headers HTTP": "analizado",
+            "nmap (externo)": "omitido — nmap no instalado (instalar: x)",
+        },
     )
     html = informe.generar(r)
     assert "Cobertura del análisis" in html
