@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "webvulnscanner"
 version = "2.0.0"
-description = "Auditor pasivo de seguridad web: reconocimiento, TLS, headers, DNS, subdominios y correlación de CVEs"
+description = "Auditor de seguridad web: 40+ módulos pasivos y activos, motores externos, nota A–F e informe HTML"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "fozzy3" }]
@@ -35,6 +35,7 @@ netlab = ["scapy>=2.5", "scikit-learn>=1.3", "numpy>=1.24"]  # + netfilterqueue 
 [project.scripts]
 webvulnscanner = "webvulnscanner.cli:main"
 webvulnscanner-covert = "webvulnscanner.covert.cli:main"
+webvulnscanner-gui = "webvulnscanner.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

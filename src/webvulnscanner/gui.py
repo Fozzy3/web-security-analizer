@@ -5,6 +5,7 @@ cola que la UI consume), no secuestrando sys.stdout. El escaneo corre en un
 hilo aparte para no congelar la ventana.
 
 Requiere: pip install -e ".[gui]"   (customtkinter)
+Uso:      webvulnscanner-gui
 """
 
 from __future__ import annotations
@@ -372,5 +373,9 @@ class App(ctk.CTk):
             self._log(f"\n📂  Reportes en: {carpeta}")
 
 
-if __name__ == "__main__":
+def main() -> None:
     App().mainloop()
+
+
+if __name__ == "__main__":
+    main()

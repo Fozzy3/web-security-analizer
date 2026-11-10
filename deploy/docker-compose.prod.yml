@@ -2,7 +2,8 @@
 # código en /opt/wsa, se engancha a la red `edge` y Traefik lo publica con TLS.
 # Sin OpenVAS: ese módulo se omite solo. Sin `ports:`.
 #
-#   cd /opt/wsa && docker compose -f docker-compose.prod.yml up -d --build
+#   cd /opt/wsa && docker compose --project-directory . -f deploy/docker-compose.prod.yml up -d
+# (--project-directory . → lee /opt/wsa/.env; la imagen la sube deploy/desplegar.sh)
 name: wsa
 
 services:

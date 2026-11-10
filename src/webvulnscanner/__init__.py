@@ -1,4 +1,4 @@
-"""WebVulnScanner — auditor pasivo de seguridad web."""
+"""WebVulnScanner — auditor de la superficie de seguridad externa de un dominio."""
 
 from webvulnscanner.models import Finding, Risk, ScanResult
 

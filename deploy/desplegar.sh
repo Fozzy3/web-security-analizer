@@ -18,7 +18,7 @@ docker build -t "$IMG" .
 # 2. Código (para /opt/wsa: compose, .env, informes). Sin la imagen: esa va por ssh.
 rsync -az --delete --exclude .git --exclude .venv --exclude venv --exclude __pycache__ \
   --exclude .pytest_cache --exclude .ruff_cache --exclude .mypy_cache --exclude .impeccable \
-  --exclude presentacion --exclude informes --exclude 'reporte_*' --exclude .env \
+  --exclude docs --exclude openspec --exclude informes --exclude 'reporte_*' --exclude .env \
   ./ "$VPS":/opt/wsa/
 
 # 3. Imagen recién construida → al server (gzip -1: rápido, la imagen es grande)
@@ -29,10 +29,10 @@ ssh "$VPS" bash -s <<'EOF'
 set -euo pipefail
 cd /opt/wsa
 if [ ! -f .env ]; then
-  cp env.example .env
+  cp deploy/env.example .env
   echo "Creado /opt/wsa/.env: completá DEMO_AUTH y volvé a correr." >&2
   exit 1
 fi
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml ps
+docker compose --project-directory . -f deploy/docker-compose.prod.yml up -d
+docker compose --project-directory . -f deploy/docker-compose.prod.yml ps
 EOF

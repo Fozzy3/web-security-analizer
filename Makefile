@@ -16,8 +16,9 @@ test:  ## Corre la suite de tests
 cov:  ## Tests con cobertura
 	pytest --cov=webvulnscanner --cov-report=term-missing
 
-lint:  ## Linter (ruff)
+lint:  ## Linter + formato (ruff)
 	ruff check .
+	ruff format --check .
 
 format:  ## Formatea el código (ruff)
 	ruff format .
@@ -25,7 +26,7 @@ format:  ## Formatea el código (ruff)
 typecheck:  ## Chequeo de tipos (mypy)
 	mypy
 
-check: lint typecheck test  ## lint + tipos + tests (lo que corre el CI)
+check: lint typecheck test  ## lint + formato + tipos + tests (correr antes de cada push)
 
 run:  ## Escaneo de ejemplo (make run DOMINIO=example.com)
 	webvulnscanner $(DOMINIO)
