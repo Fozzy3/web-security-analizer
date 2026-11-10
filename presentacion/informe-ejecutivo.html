@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebVulnScanner 2.0 — Documento ejecutivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#182230;      /* texto principal */
+    --soft:#454f5e;     /* secundario */
+    --mute:#77808f;     /* terciario */
+    --line:#dfe3ea;     /* hairlines */
+    --line-soft:#eef1f5;
+    --paper:#ffffff;
+    --accent:#b5620b;   /* ámbar tinta, alto contraste sobre blanco */
+    --accent-deep:#8f4c08;
+    --panel:#faf7f2;    /* tinte cálido muy sutil */
+    --panel-line:#ecdfca;
+    --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --s:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:#e7ebf1}
+  body{font-family:var(--serif);color:var(--ink);line-height:1.5;
+    font-size:13.5px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  ::selection{background:rgba(181,98,11,.16)}
+
+  .page{
+    width:210mm;min-height:296mm;margin:16px auto;background:var(--paper);
+    padding:12mm 12mm;box-shadow:0 20px 64px -34px rgba(20,30,50,.55);
+    position:relative;display:flex;flex-direction:column;
+  }
+
+  /* ---------- masthead ---------- */
+  .mast{display:flex;justify-content:space-between;align-items:baseline;
+    padding-bottom:11px;border-bottom:1px solid var(--ink);margin-bottom:24px}
+  .wordmark{font-family:var(--mono);font-weight:600;font-size:14px;letter-spacing:.01em;color:var(--ink)}
+  .wordmark .v{color:var(--accent)}
+  .meta{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--mute)}
+
+  /* ---------- titular ---------- */
+  .title{font-family:var(--serif);font-weight:700;font-size:30px;line-height:1.1;
+    letter-spacing:-.012em;max-width:19ch;margin-bottom:13px;text-wrap:balance}
+  .title em{font-style:normal;color:var(--accent)}
+  .lead{font-size:14.5px;line-height:1.55;color:var(--soft);margin-bottom:4px}
+  .lead b{color:var(--ink);font-weight:600}
+
+  /* ---------- secciones ---------- */
+  section.block{margin-top:var(--s)}
+  h2{font-family:var(--serif);font-weight:600;font-size:15.5px;color:var(--ink);
+    letter-spacing:-.005em;padding-bottom:6px;margin-bottom:11px;
+    border-bottom:1px solid var(--line);position:relative}
+  h2::after{content:"";position:absolute;left:0;bottom:-1px;width:38px;height:2px;background:var(--accent)}
+  p{color:var(--soft);margin-bottom:7px}
+  p:last-child{margin-bottom:0}
+  p b{color:var(--ink);font-weight:600}
+
+  /* ---------- lista de definición (único recurso estructural) ---------- */
+  .dl{display:grid;grid-template-columns:158px 1fr;column-gap:26px}
+  .dl > div{display:contents}
+  .dl dt{font-weight:600;color:var(--ink);padding:6px 0;
+    border-top:1px solid var(--line-soft)}
+  .dl dd{color:var(--soft);padding:6px 0;border-top:1px solid var(--line-soft);line-height:1.42}
+  .dl > div:first-child dt,.dl > div:first-child dd{border-top:none}
+
+  /* ---------- panel de cumplimiento (acento único de página) ---------- */
+  .note{background:var(--panel);border:1px solid var(--panel-line);border-radius:4px;
+    padding:15px 20px;margin-top:12px}
+  .note h3{font-family:var(--mono);font-weight:600;font-size:10px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent-deep);margin-bottom:7px}
+  .note p{color:#6b5638;max-width:none;font-size:12.5px;line-height:1.5}
+  .note b{color:#4f3f28}
+
+  /* ---------- cierre ---------- */
+  .close{margin-top:auto;padding-top:18px}
+  .close-band{background:var(--ink);color:#fff;border-radius:6px;padding:20px 26px}
+  .close-band .h{font-family:var(--serif);font-weight:700;font-size:19px;line-height:1.25;letter-spacing:-.01em}
+  .close-band .h em{font-style:normal;color:#f0a24a}
+  .close-band .p{color:#c3ccd9;font-size:12.5px;margin-top:8px;max-width:58ch;line-height:1.5}
+
+  .foot{margin-top:14px;padding-top:10px;border-top:1px solid var(--line);
+    display:flex;justify-content:space-between;font-family:var(--mono);
+    font-size:9px;letter-spacing:.05em;color:var(--mute)}
+
+  @page{size:A4;margin:0}
+  @media print{
+    html{background:#fff}
+    .page{margin:0;box-shadow:none;width:auto;min-height:0;padding:12mm 12mm;display:block}
+    .page + .page{page-break-before:always}
+    .close{margin-top:26px}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .note,.close-band,.dl > div{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= PÁGINA 1 ================= -->
+<section class="page">
+  <div class="mast">
+    <div class="wordmark">WebVuln<span class="v">Scanner</span> 2.0</div>
+    <div class="meta">Documento ejecutivo</div>
+  </div>
+
+  <h1 class="title">Sepa qué tan seguros están los sitios web de su institución.</h1>
+  <p class="lead">WebVulnScanner examina, desde afuera y <b>sin instalar nada</b>, los sitios web y
+  servicios en internet de su organización. Entrega una <b>calificación de la A a la F</b> y una lista
+  priorizada de qué corregir primero, explicada en lenguaje que cualquier directivo puede entender
+  y presentar.</p>
+
+  <section class="block">
+    <h2>El problema que resuelve</h2>
+    <p>Toda institución tiene una puerta abierta a internet: su página, su correo, sus servicios en
+    línea. Un atacante los examina desde afuera buscando el eslabón más débil, y con frecuencia la
+    organización es la última en enterarse. La auditoría de seguridad tradicional es costosa, lenta y
+    suele terminar en un informe de cientos de páginas técnicas que <b>nadie fuera del área de sistemas
+    entiende</b> — y que, por eso mismo, rara vez se traduce en acciones concretas.</p>
+    <p>WebVulnScanner cierra esa brecha: mira su exposición con los mismos ojos de un atacante y la
+    explica en términos de negocio y de riesgo, para que decidir qué atender primero no dependa de
+    traducir jerga técnica.</p>
+  </section>
+
+  <section class="block">
+    <h2>Cómo funciona</h2>
+    <p>El proceso es deliberadamente simple. <b>Usted indica</b> únicamente la dirección del sitio — sin
+    accesos internos, sin claves, sin instalar nada. <b>El sistema revisa</b> más de quince frentes de
+    seguridad tal como los vería alguien desde internet. Y al final <b>usted recibe</b> una calificación
+    clara de la A a la F, acompañada de una lista de qué arreglar primero, ordenada por nivel de riesgo.
+    Una pasada completa toma minutos, no semanas, y puede repetirse cuantas veces quiera.</p>
+  </section>
+
+  <section class="block">
+    <h2>Qué revisa</h2>
+    <p>Cubre los frentes que de verdad ponen en riesgo a una institución — los mismos que un atacante
+    intentaría primero:</p>
+    <dl class="dl">
+      <div><dt>Conexión segura</dt><dd>Verifica que el candado del sitio sea fuerte y que nadie pueda espiar los datos de sus usuarios.</dd></div>
+      <div><dt>Puertas abiertas</dt><dd>Detecta servicios expuestos a internet que deberían estar cerrados.</dd></div>
+      <div><dt>Información filtrada</dt><dd>Localiza archivos, copias de seguridad o datos sensibles visibles para cualquiera.</dd></div>
+      <div><dt>Correo suplantable</dt><dd>Comprueba si alguien podría enviar correos haciéndose pasar por su institución.</dd></div>
+      <div><dt>Sitios olvidados</dt><dd>Identifica páginas o subdominios abandonados que un tercero podría secuestrar.</dd></div>
+      <div><dt>Fallas conocidas</dt><dd>Contrasta su software contra vulnerabilidades ya reportadas públicamente y peligrosas.</dd></div>
+    </dl>
+  </section>
+
+  <div class="foot">
+    <span>WebVulnScanner 2.0 — Auditoría de seguridad web externa</span>
+    <span>1 / 2</span>
+  </div>
+</section>
+
+<!-- ================= PÁGINA 2 ================= -->
+<section class="page">
+  <div class="mast">
+    <div class="wordmark">WebVuln<span class="v">Scanner</span> 2.0</div>
+    <div class="meta">Documento ejecutivo</div>
+  </div>
+
+  <section class="block" style="margin-top:0">
+    <h2>Por qué conviene</h2>
+    <dl class="dl">
+      <div><dt>Sin fricción</dt><dd>No requiere tocar sus servidores ni interrumpir servicios: observa desde afuera, como lo haría un tercero.</dd></div>
+      <div><dt>Rápido y repetible</dt><dd>Una revisión completa en minutos, no en semanas, y sin costo adicional por volver a ejecutarla.</dd></div>
+      <div><dt>Lenguaje claro</dt><dd>Cada hallazgo se expresa como riesgo real para el negocio, listo para llevar a dirección sin traducción técnica.</dd></div>
+      <div><dt>Prioridades, no ruido</dt><dd>Le dice qué atender primero según su nivel de riesgo, en lugar de abrumar con una lista interminable.</dd></div>
+      <div><dt>Avance medible</dt><dd>Compara escaneos en el tiempo y demuestra, con evidencia, que su seguridad efectivamente mejora.</dd></div>
+    </dl>
+  </section>
+
+  <section class="block">
+    <h2>Marco de uso — usted decide hasta dónde</h2>
+    <p>La herramienta ofrece dos niveles de revisión, y ninguno más profundo se ejecuta sin su
+    autorización. En el <b>modo pasivo</b>, siempre activo y de riesgo nulo, observa el sitio desde
+    afuera sin tocar nada ni enviar ataques — como examinar la fachada de un edificio, sin interrumpir
+    su operación. En el <b>modo activo</b>, y solo con su permiso expreso, realiza pruebas controladas y
+    sin daño que confirman si una debilidad es explotable de verdad.</p>
+
+    <div class="note">
+      <h3>Uso responsable y trazable</h3>
+      <p>La herramienta nace con un enfoque ético y de cumplimiento: por defecto solo observa, y toda
+      prueba activa exige autorización expresa sobre dominios propios. Cada escaneo queda documentado con
+      su fecha, alcance y evidencia, lo que permite a la institución <b>demostrar diligencia</b> en la
+      protección de su información y sustentar el resultado ante procesos de control y auditoría.</p>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Qué recibe su institución</h2>
+    <p>De cada revisión resultan tres piezas complementarias: un <b>informe ejecutivo</b>, claro y al
+    grano, con la calificación y las prioridades para decidir sin ser técnico; un <b>informe técnico</b>,
+    con el paso a paso y la evidencia para que su equipo corrija cada hallazgo; y un formato <b>listo
+    para auditoría</b>, que soporta sus procesos de control, cumplimiento y sustentación documental.</p>
+  </section>
+
+  <div class="close">
+    <div class="close-band">
+      <div class="h">Vea su exposición. <em>Actúe con prioridad.</em></div>
+      <div class="p">Solicite una revisión piloto de sus dominios y reciba su calificación de la A a la F
+      junto con un plan de acción priorizado.</div>
+    </div>
+    <div class="foot">
+      <span>WebVulnScanner 2.0 — fozzy3</span>
+      <span>2 / 2</span>
+    </div>
+  </div>
+</section>
+
+<script>window.addEventListener("load",()=>{const p=[...document.querySelectorAll(".page")].map(e=>Math.round(e.getBoundingClientRect().height));document.title="H="+p.join(",")+"|limite=1122";});</script></body>
+</html>
