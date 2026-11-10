@@ -29,3 +29,7 @@ informes/
 htmlcov/
 .schemathesis/
 .atl/
+
+# Despliegue con Greenbone (los baja/genera deploy/setup.sh)
+deploy/greenbone.yml
+deploy/reports/

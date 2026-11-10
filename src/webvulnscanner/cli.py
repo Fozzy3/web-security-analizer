@@ -19,7 +19,7 @@ _MODULOS_ACTIVOS = [n for n, _ in MODULOS_ACTIVOS]
 
 # Perfiles de escaneo (C5): subconjuntos de módulos para casos comunes.
 # "full" es None a propósito: significa "todo lo disponible", que con
-# --authorized incluye los módulos activos (un set fijo los dejaría fuera).
+# incluye también los módulos activos (un set fijo los dejaría fuera).
 _PERFILES: dict[str, set[str] | None] = {
     "full": None,
     "quick": {"recon", "tls", "headers", "waf", "fingerprint"},
@@ -32,7 +32,7 @@ _PERFILES: dict[str, set[str] | None] = {
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="webvulnscanner",
-        description="Auditor pasivo de seguridad web (académico y ético).",
+        description="Auditor de seguridad web: escaneo pasivo + activo completo de un dominio.",
         epilog="Solo analice sitios propios o con autorización expresa.",
     )
     p.add_argument("dominio", nargs="?", help="dominio objetivo (ej: example.com)")
