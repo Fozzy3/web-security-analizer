@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
 ## [No publicado]
 
+### Cambiado — Organización del repo y documentación
+- Documentación en `docs/`: nueva `ARQUITECTURA.md` (capas, flujo en 2 fases, catálogo de módulos, despliegue) y README reescrito con diagramas.
+- Archivos de despliegue juntos en `deploy/` (`docker-compose.prod.yml`, `env.example`); `desplegar.sh` actualizado.
+- La GUI pasa al paquete: se abre con `webvulnscanner-gui`.
+- Sin CI en GitHub Actions: `make check` (ahora incluye el chequeo de formato) se corre antes de cada push.
+- Licencia MIT en `LICENSE`.
+
 ### Añadido — Informe de 3 pestañas auto-generado (`informe.py`)
 - La herramienta genera **automáticamente** `informe.html` (pestañas 📋 Informe · 🗂️ Inteligencia · 🔍 Qué revisa) desde el resultado del escaneo — ya no se cura a mano.
 - Data-driven: la pestaña "Qué revisa" sale de una tabla única de módulos (fuente de verdad). Tema claro/oscuro, responsive, CSS puro, HTML escapado.

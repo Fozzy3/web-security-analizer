@@ -1,205 +1,202 @@
-# WebVulnScanner 2.0 — Auditoría de Seguridad Web
+<div align="center">
 
-**Materia:** Redes de Computadores · **Autor:** fozzy3
-**Enfoque:** Ético y académico. Pasivo por defecto; el modo activo exige autorización explícita.
+# 🛡️ WebVulnScanner
 
-Auditor de la superficie de seguridad *externa* de un dominio. Clasifica cada hallazgo por riesgo
-(🔴 Alto / 🟡 Medio / 🟢 Bajo / 🔵 Info / ✅ Buenas prácticas), calcula una **nota A–F** y exporta el
-reporte en **TXT, JSON, HTML y SARIF**.
+**Audita la superficie de seguridad externa de un dominio y la explica en un informe que se entiende sin ser experto.**
 
----
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-listo-2496ED?logo=docker&logoColor=white)
+![OWASP](https://img.shields.io/badge/OWASP-Top%2010%202025-000000)
+![Licencia](https://img.shields.io/badge/licencia-MIT-green)
 
-## Capacidades
+</div>
 
-### Módulos pasivos (por defecto — no envían payloads al objetivo)
+> [!WARNING]
+> El escaneo es **activo**: envía peticiones de prueba al objetivo (inyecciones, fuzzing, ráfagas de
+> rate limiting, nuclei, nmap…). Úsalo solo sobre dominios propios o con autorización expresa por escrito.
 
-| Módulo | Qué analiza |
-|--------|-------------|
-| **Reconocimiento** | DNS A/AAAA (IPv4+IPv6), cabeceras `Server`/`X-Powered-By`, producto+versión |
-| **Puertos + banners** | TCP connect scan a 17 puertos + *banner grabbing* de versión |
-| **TLS/HTTPS** | Enumera versiones (detecta SSLv3/TLS 1.0/1.1), **ciphers débiles**, validez/CN/SAN, **fuerza de clave** (RSA<2048, firma SHA-1), redirección HTTP→HTTPS |
-| **Headers HTTP** | Evalúa el **valor** de CSP (unsafe-inline, wildcards) y HSTS (max-age, includeSubDomains) |
-| **DNS y correo** | MX, **SPF/DMARC/DKIM/BIMI**, **CAA**, **DNSSEC** y prueba de **transferencia de zona (AXFR)** |
-| **Subdominios** | Enumeración vía **Certificate Transparency** (crt.sh) + detección de **subdomain takeover** (CNAME colgante) |
-| **Exposición** | `.git/`, `.env`, backups, `robots.txt`, `security.txt` |
-| **WAF/CDN** | Cloudflare, Akamai, Sucuri, Fastly, Vercel… |
-| **Fingerprint** | CMS/frameworks (WordPress, Drupal, Laravel, Django…) |
-| **CVEs (NVD)** | Correlación **por CPE** del producto+versión (elimina falsos positivos del keyword search) |
-| **Shodan** *(opcional)* | Inteligencia de la IP vía Shodan (requiere `SHODAN_API_KEY`) |
+Le das un dominio y corre **41 módulos** de análisis (TLS, cabeceras, DNS y correo, subdominios,
+archivos expuestos, inyecciones, control de acceso, CVEs) junto con motores externos de referencia:
+nuclei, testssl.sh, sslyze, nmap, WPScan y OpenVAS. Entrega una **nota A–F**, cada hallazgo con su
+riesgo, CWE, CVSS y categoría OWASP 2025, y un informe HTML que aparece en minutos y se completa solo
+cuando terminan los análisis lentos.
 
-### Módulos activos (`--authorized` — envían peticiones al objetivo)
+## Cómo funciona
 
-> ⚠️ **Solo en objetivos propios o con autorización expresa.** Sin el flag `--authorized` ni siquiera se cargan.
+```mermaid
+flowchart TB
+    subgraph IN["Entradas"]
+        direction LR
+        CLI["CLI<br/>webvulnscanner"]
+        WEB["Web + API REST<br/>FastAPI"]
+        GUI["GUI de escritorio<br/>customtkinter"]
+    end
 
-| Módulo | Qué prueba |
-|--------|-----------|
-| **Cookies** | Flags `Secure`, `HttpOnly`, `SameSite` |
-| **CORS** | Reflexión de `Origin` arbitrario y `Allow-Credentials` |
-| **Inyección** | XSS reflejado (marcador) y SQLi error-based (comilla) |
-| **Fuzzing** | Rutas comunes por diccionario (concurrente) |
+    CLI --> ORQ
+    WEB --> ORQ
+    GUI --> ORQ
 
----
+    ORQ["Orquestador<br/>run_scan"] --> RECON["Recon<br/>DNS · IP · servidor"]
+    RECON --> CRAWL["Crawler<br/>URLs · parámetros · scripts"]
+    CRAWL --> F1["Fase 1 · módulos rápidos<br/>pasivos + activos en paralelo"]
+    F1 --> F2["Fase 2 · motores lentos<br/>nuclei · testssl · nmap · OpenVAS"]
+    F2 --> POST["Post-proceso<br/>CVE sin duplicar · CWE/CVSS<br/>KEV/EPSS · OWASP 2025"]
+    POST --> OUT["Salidas<br/>informe.html · JSON · TXT<br/>SARIF · SBOM"]
+    F1 -.->|informe parcial| OUT
+```
 
-## Instalación
+1. **Recon** resuelve el dominio y detecta servidor y versión. Si el dominio no resuelve, el escaneo termina ahí.
+2. **Crawler** recorre el sitio y comparte URLs, parámetros, formularios y scripts con los módulos que los usan.
+3. **Fase 1**: los módulos rápidos corren en paralelo y se escribe un informe parcial.
+4. **Fase 2**: terminan los motores lentos y el informe se actualiza solo.
+5. **Post-proceso**: quita CVE repetidos, añade CWE, CVSS y explotabilidad (CISA KEV, EPSS), etiqueta OWASP y calcula la nota.
 
-Requiere **Python 3.10+**.
+Si un módulo falla, el escaneo sigue y lo anota. Si falta un motor externo, su módulo se omite y el
+informe dice cómo instalarlo. El detalle de cada pieza está en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
+
+## Inicio rápido
+
+**Con Docker.** La imagen trae todos los motores externos menos OpenVAS.
+
+```bash
+make docker                                              # construye webvulnscanner:2.0
+docker run --rm -v "$PWD:/reports" webvulnscanner:2.0 tu-dominio.com
+# → informes/tu-dominio.com/informe.html
+```
+
+**Desde el código.**
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e .            # núcleo (CLI): dnspython + cryptography
-pip install -e ".[gui]"     # + interfaz gráfica (customtkinter)
-pip install -e ".[api]"     # + API REST (FastAPI + uvicorn)
-pip install -e ".[dev]"     # + pytest, ruff, mypy
-
-# o todo de una:
-make dev
+make dev                          # paquete + gui + api + herramientas de desarrollo
+pip install -e ".[enhanced,apifuzz]"   # opcional: sslyze, Wappalyzer, schemathesis…
+webvulnscanner --check-tools      # qué motores tienes y cómo instalar los que faltan
+webvulnscanner tu-dominio.com
 ```
 
----
+## Formas de usarlo
 
-## Uso
+| Interfaz | Cómo se abre | Para qué |
+|---|---|---|
+| CLI | `webvulnscanner <dominio>` | escaneos puntuales, scripts, pipelines |
+| Web | `make api` → http://localhost:8000 | pegar una URL y ver el informe en vivo |
+| API REST | `POST /scan` · `POST /ui/scan` | integrarlo con otras herramientas |
+| GUI de escritorio | `webvulnscanner-gui` | uso local con ventana |
+| Laboratorio de red | `webvulnscanner-covert demo` | canal encubierto en el IP ID (capa 3/4) |
 
 ### CLI
 
 ```bash
-webvulnscanner example.com                 # escaneo pasivo completo → TXT/JSON/HTML
-webvulnscanner example.com --profile quick # perfil rápido (recon, tls, headers, waf, fingerprint)
-webvulnscanner example.com --only tls,dns  # solo ciertos módulos
-webvulnscanner example.com --sarif         # además exporta .sarif (CI/GitHub Security)
-webvulnscanner example.com --diff prev.json  # regresiones vs. un reporte anterior
-webvulnscanner miweb.com   --authorized    # habilita módulos ACTIVOS (con autorización)
-webvulnscanner example.com -o reportes/ -q # carpeta de salida, sin log de progreso
+webvulnscanner tu-dominio.com                       # todo → informes/tu-dominio.com/
+webvulnscanner tu-dominio.com --profile quick       # recon, tls, headers, waf, fingerprint
+webvulnscanner tu-dominio.com --only tls,dns        # solo esos módulos
+webvulnscanner tu-dominio.com --skip nuclei,openvas # todo menos esos
+webvulnscanner tu-dominio.com --sarif --sbom sbom.json
+webvulnscanner tu-dominio.com --diff informes/tu-dominio.com/reporte_anterior.json
+webvulnscanner tu-dominio.com --cookie 'sid=abc' --rps 5   # zona autenticada, 5 peticiones/s
 ```
 
-Perfiles disponibles: `full` (def), `quick`, `tls`, `web`, `dns`.
-Devuelve **código de salida 2** si hay hallazgos de riesgo alto (útil para CI).
+- Perfiles: `full` (por defecto), `quick`, `tls`, `web`, `dns`.
+- `--write-baseline .wvsignore` acepta los hallazgos actuales; los siguientes escaneos los ocultan.
+- Sale con **código 2** si hay hallazgos de riesgo alto, útil para cortar un pipeline.
 
-### Interfaz gráfica
+### Web y API REST
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `GET` | `/` | formulario: pegas el dominio y arranca |
+| `POST` | `/ui/scan` | lanza el escaneo en segundo plano → `{job_id, url}` |
+| `GET` | `/ui/report/{job_id}` | informe HTML que se recarga solo hasta terminar |
+| `POST` | `/scan` | escaneo síncrono → `{nota, puntaje, reporte}` en JSON |
+| `GET` | `/health` | estado, versión y lista de módulos |
 
 ```bash
-python gui.py
-```
-
-### API REST
-
-```bash
-uvicorn webvulnscanner.api:app --reload     # o: make api
 curl -X POST localhost:8000/scan -H 'Content-Type: application/json' \
-     -d '{"dominio": "example.com", "activos": ["recon","tls","headers"]}'
+     -d '{"dominio": "tu-dominio.com", "activos": ["recon", "tls", "headers"]}'
 ```
 
-`POST /scan` corre síncrono y devuelve el reporte en JSON (útil para automatizar).
+> [!CAUTION]
+> No publiques la web ni la API sin autenticación: cualquiera podría usarlas para escanear a
+> terceros desde tu servidor. El despliegue de producción las pone detrás de Traefik con basic auth.
 
-### Web — "pegá la URL y arranca"
+## Qué revisa
 
-El mismo servidor expone una página en `/`: pegás una URL, se lanza el escaneo
-completo en segundo plano y te redirige a un informe que **se actualiza solo**
-(el escaneo profundo con OpenVAS tarda 10-40 min).
+| Área | Qué busca | Módulos |
+|---|---|---|
+| Reconocimiento | IP, puertos y banners, WAF/CDN, tecnologías y versiones, subdominios, Shodan | `recon` `ports` `waf` `fingerprint` `stack` `subdomains` `subfinder` `shodan` |
+| TLS | protocolos y cifrados débiles, certificado, Heartbleed/ROBOT | `tls` `tls_deep` `testssl` |
+| Navegador | CSP, HSTS, mixed content, SRI, cookies, CORS, CSRF | `headers` `webchecks` `cookies` `cors` `csrf` |
+| DNS y correo | SPF, DMARC, DKIM, CAA, DNSSEC, AXFR, MTA-STS, TLS-RPT | `dns` `mail_transport` |
+| Exposición | `.git`, `.env`, backups, secretos en JS, librerías vulnerables, buckets cloud, supply chain | `disclosure` `secrets` `retirejs` `cloud` `sbom` |
+| CMS y frameworks | WordPress, Drupal, Joomla, Laravel, paneles de administración | `wordpress` `frameworks` `wpscan` |
+| APIs | OpenAPI/GraphQL expuestos, JWT débiles, fuzzing por contrato, rate limiting | `api` `jwt` `api_fuzz` `rate_limit` |
+| Ataque activo | XSS/SQLi, open redirect, rutas ocultas, IDOR, autenticación, SSRF, errores con traza | `inyeccion` `open_redirect` `fuzzing` `access_control` `auth_test` `ssrf` `error_audit` |
+| Vulnerabilidades conocidas | CVE por versión (NVD), plantillas nuclei, `nmap --script vuln`, OpenVAS | `cve` `nuclei` `nmap` `openvas` |
+
+El catálogo completo, con fase y motor de cada módulo, está en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md#catálogo-de-módulos).
+
+## Qué entrega
+
+Cada escaneo escribe en `informes/<dominio>/`:
+
+| Archivo | Contenido |
+|---|---|
+| `informe.html` | informe de 3 pestañas: **Informe** (nota, hallazgos por riesgo, controles PCI-DSS / ISO 27001 / NIST afectados), **Inteligencia** (tecnologías, certificado, cobertura de módulos) y **Qué revisa**. Se recarga solo mientras corre la fase 2 |
+| `reporte_<dominio>_<fecha>.json` | resultado completo; es la entrada de `--diff` |
+| `reporte_<dominio>_<fecha>.txt` / `.html` | versión de consola y HTML simple |
+| `.sarif` (con `--sarif`) | para GitHub code scanning, Azure DevOps o GitLab |
+| SBOM (con `--sbom`) | CycloneDX con los componentes detectados |
+
+## Despliegue
+
+| Escenario | Comando | OpenVAS |
+|---|---|---|
+| Local | `docker run` del inicio rápido | no |
+| Todo en uno con Greenbone | `GVM_PASSWORD='clave-fuerte' ./deploy/setup.sh` | sí; la primera vez el feed tarda horas |
+| Servidor con Traefik | `bash deploy/desplegar.sh` | no |
+
+Cómo encaja cada uno: [docs/ARQUITECTURA.md › Despliegue](docs/ARQUITECTURA.md#despliegue).
+
+## Estructura
+
+```text
+.
+├── src/webvulnscanner/   # paquete: núcleo, orquestador, salidas, CLI, API y GUI
+│   ├── modules/          # un archivo por capacidad de análisis
+│   └── covert/           # laboratorio de canal encubierto (capa 3/4)
+├── tests/                # suite de pytest
+├── deploy/               # compose de Greenbone, compose de producción y scripts
+├── docs/                 # arquitectura, roadmap, playbook del informe, presentación
+├── openspec/             # specs de cada capacidad de seguridad
+├── Dockerfile            # imagen con motores externos (CLI y web)
+└── Makefile              # dev, check, cov, api, docker…
+```
+
+## Desarrollo
 
 ```bash
-uvicorn webvulnscanner.api:app --host 0.0.0.0 --port 8000
-# abrí http://localhost:8000
+make dev     # instala con extras de desarrollo
+make check   # ruff (lint + formato) + mypy + pytest
+make cov     # cobertura
 ```
 
-Endpoints web: `POST /ui/scan` (`{"dominio": "..."}` → `{job_id, url}`) y
-`GET /ui/report/{job_id}` (informe HTML, con auto-refresh mientras corre).
+No hay CI: corre `make check` antes de cada push.
 
-> ⚠️ La web corre módulos **activos** contra el objetivo que se pegue. Un `/`
-> abierto a internet = escaneo-como-servicio para terceros (abuso). Exponelo solo
-> en red confiable o detrás de auth/allowlist de dominios propios.
+## Documentación
 
-### Docker (CLI)
-
-```bash
-make docker                                 # construye webvulnscanner:2.0
-docker run --rm -v "$PWD/reportes:/reports" webvulnscanner:2.0 example.com
-```
-
-> En entornos con DNS restringido en el build (algunos sandboxes/CI), use
-> `docker build --network=host -t webvulnscanner:2.0 .`
-
-### Despliegue todo-en-uno con OpenVAS (docker-compose)
-
-Para que OpenVAS corra **con todas sus NVTs**, hace falta la pila Greenbone
-completa (gvmd + ospd-openvas + PostgreSQL + Redis + feed). El script la baja y
-la levanta junto a la web, compartiendo el socket GMP:
-
-```bash
-GVM_PASSWORD='una-clave-fuerte' ./deploy/setup.sh
-# → web en http://localhost:8000
-```
-
-Requisitos: Docker + `docker compose` v2, ~4 GB RAM, ~10 GB disco.
-
-> ⏳ **Primer arranque:** Greenbone sincroniza el feed de NVTs durante **horas**.
-> Hasta que termine, el módulo OpenVAS no da resultados (el resto del escáner
-> funciona igual). Seguí el avance con `docker compose ... logs -f gvmd`.
-
-Sin esta pila, el módulo OpenVAS se auto-omite (como cualquier motor externo
-ausente); comprobá qué falta con `webvulnscanner --check-tools`.
-
----
-
-## Sitios de prueba autorizados
-
-| Sitio | Descripción |
-|-------|-------------|
-| `scanme.nmap.org` | Nmap — autorizado explícitamente para escaneos |
-| `testphp.vulnweb.com` | Acunetix — PHP vulnerable de prueba |
-| `example.com` | IANA — dominio de referencia |
-
-⚠️ **NUNCA** use esta herramienta —y menos el modo activo— en sitios sin autorización explícita.
-
----
-
-## Arquitectura
-
-```
-src/webvulnscanner/
-├── models.py         # Núcleo puro: Finding, Risk, ScanResult (sin red ni UI)
-├── net.py            # Utilidades HTTP/socket compartidas
-├── cache.py          # Caché en disco con TTL (crt.sh, NVD, Shodan)
-├── scoring.py        # Nota A–F ponderada
-├── orchestrator.py   # Coordina módulos en paralelo, aísla fallos, gatea lo activo
-├── report.py         # Render TXT/JSON (puro) + guardado (único I/O)
-├── html.py           # Reporte HTML autocontenido (escapa contenido remoto)
-├── sarif.py          # Export SARIF 2.1.0
-├── diff.py           # Comparación entre escaneos
-├── cli.py / api.py   # Entradas de consola y REST
-└── modules/          # Un módulo por capacidad (10 pasivos + 4 activos + shodan)
-gui.py                # Interfaz (customtkinter), habla con el núcleo vía logging
-tests/                # 285 tests (lógica pura, orquestador, CLI/API, red simulada)
-```
-
-**Decisiones de diseño:**
-- **Concurrencia**: los módulos independientes corren en paralelo (escaneo ~6× más rápido).
-- **Sin acoplamiento por `print`**: progreso vía `logging`; CLI, GUI y API enganchan sus handlers.
-- **Render puro separado de I/O**: `render_*` son funciones sin efectos → testeables sin filesystem/red.
-- **Fallo aislado por módulo**: si uno revienta, el escaneo continúa y lo reporta.
-- **Caché que no se envenena**: los fallos de red no se persisten (no bloquean el TTL).
-- **Modo activo estrictamente gateado**: `autorizado=True` es la única vía de cargarlo.
-
-### Calidad
-
-```bash
-make check      # ruff (lint+format) + mypy (tipado) + pytest
-make cov        # cobertura
-```
-
-CI en GitHub Actions corre lint, tipos y tests sobre Python 3.10–3.12 en cada push.
-
----
+- [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md): capas, flujo del escaneo, catálogo de módulos, despliegue y decisiones de diseño.
+- [docs/ROADMAP.md](docs/ROADMAP.md): lo que falta, priorizado.
+- [docs/INFORME_PLAYBOOK.md](docs/INFORME_PLAYBOOK.md): cómo curar un informe a mano.
+- [src/webvulnscanner/covert/README.md](src/webvulnscanner/covert/README.md): laboratorio de canal encubierto en el IP ID.
+- [CHANGELOG.md](CHANGELOG.md): historial de cambios.
+- [docs/presentacion/](docs/presentacion/): deck y documento ejecutivo.
 
 ## Ética y alcance
 
-El núcleo es **pasivo**: peticiones HTTP normales, handshakes TLS y consultas a fuentes públicas
-(crt.sh, NVD, Shodan). El **modo activo** (`--authorized`) envía peticiones elaboradas (payloads no
-destructivos) y **solo** debe usarse sobre objetivos propios o con permiso expreso.
+Escanear sistemas ajenos sin permiso es delito en la mayoría de países (en Colombia, Ley 1273 de 2009).
+Para practicar hay objetivos hechos para eso: `scanme.nmap.org` (Nmap) y `testphp.vulnweb.com` (Acunetix).
 
-## Limitaciones / trabajo futuro
+## Licencia
 
-- El modo activo es de superficie (parámetros a nivel raíz); un **crawler** para descubrir parámetros
-  y formularios sería el siguiente incremento.
-- No se detectan Heartbleed/ROBOT (requieren manipulación TLS de bajo nivel).
-- Diccionario de fuzzing corto (10 rutas); ampliable.
-- Posibles extensiones: dashboard web, publicación en PyPI, integración Censys.
+[MIT](LICENSE) © fozzy3
